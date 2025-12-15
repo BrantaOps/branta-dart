@@ -3,6 +3,6 @@
 /// More dartdocs go here.
 library;
 
-export 'src/branta_base.dart';
+export 'src/v2/api.dart';
 
 // TODO: Export any libraries intended for clients of this package.
