@@ -63,3 +63,12 @@ var payment = PaymentBuilder()
 // POST req (requires API_KEY)
 var result3 = await brantaClient.addPaymentAsync(payment);
 ```
+
+## Publishing
+```
+dart pub login
+```
+
+```
+dart pub publish
+```

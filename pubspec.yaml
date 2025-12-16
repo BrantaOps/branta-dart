@@ -1,5 +1,5 @@
 name: branta
-description: A starting point for Dart libraries or applications.
+description: A Branta SDK for Dart.
 version: 0.0.1
 repository: https://github.com/BrantaOps/branta-dart
 
