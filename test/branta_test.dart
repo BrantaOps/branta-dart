@@ -272,5 +272,136 @@ void main() {
       expect(result[0].destinations[1].value, equals('plain-addr'));
       client.dispose();
     });
+
+    group('getPaymentsByQRCodeAsync', () {
+      BrantaClient makeClient(MockClient mock) => BrantaClient(
+        httpClient: mock,
+        config: BrantaConfig(baseUrl: baseUrl),
+      );
+
+      // Returns a MockClient that captures requests and returns an empty list.
+      (MockClient, List<Uri>) capturingMock() {
+        final urls = <Uri>[];
+        return (
+          MockClient((req) async {
+            urls.add(req.url);
+            return http.Response('[]', 200);
+          }),
+          urls,
+        );
+      }
+
+      test('ZK query params routes to getZKPaymentsAsync with correct id and secret', () async {
+        const secret = 'zk-secret';
+        const originalAddress = 'bc1qoriginaladdress';
+        final encrypted = await AesEncryption.encrypt(originalAddress, secret);
+        final payment = Payment(
+          destinations: [Destination(value: encrypted, zk: true)],
+          ttl: 3600,
+        );
+
+        late Uri capturedUrl;
+        final client = makeClient(MockClient((req) async {
+          capturedUrl = req.url;
+          return http.Response(json.encode([payment.toJson()]), 200);
+        }));
+
+        final result = await client.getPaymentsByQRCodeAsync(
+          'bitcoin:$originalAddress?branta_id=PAYMENT_ID&branta_secret=$secret',
+        );
+
+        expect(capturedUrl.toString(), equals('$baseUrl/v2/payments/PAYMENT_ID'));
+        expect(result[0].destinations[0].value, equals(originalAddress));
+        client.dispose();
+      });
+
+      test('bitcoin segwit (bc1q) URI strips prefix and lowercases', () async {
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+        await client.getPaymentsByQRCodeAsync('bitcoin:BC1QABC123');
+        expect(urls[0].pathSegments.last, equals('bc1qabc123'));
+        client.dispose();
+      });
+
+      test('bitcoin non-segwit URI strips prefix and preserves case', () async {
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+        await client.getPaymentsByQRCodeAsync('bitcoin:1ABCDef');
+        expect(urls[0].pathSegments.last, equals('1ABCDef'));
+        client.dispose();
+      });
+
+      test('bitcoin bcrt URI strips prefix and lowercases', () async {
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+        await client.getPaymentsByQRCodeAsync('bitcoin:BCRT1QABC');
+        expect(urls[0].pathSegments.last, equals('bcrt1qabc'));
+        client.dispose();
+      });
+
+      test('lightning URI strips prefix and lowercases', () async {
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+        await client.getPaymentsByQRCodeAsync('lightning:LNBC1234TEST');
+        expect(urls[0].pathSegments.last, equals('lnbc1234test'));
+        client.dispose();
+      });
+
+      test('lnbc prefix without scheme lowercases', () async {
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+        await client.getPaymentsByQRCodeAsync('LNBC1234TEST');
+        expect(urls[0].pathSegments.last, equals('lnbc1234test'));
+        client.dispose();
+      });
+
+      test('bc1q prefix without scheme lowercases', () async {
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+        await client.getPaymentsByQRCodeAsync('BC1QABC123');
+        expect(urls[0].pathSegments.last, equals('bc1qabc123'));
+        client.dispose();
+      });
+
+      test('Branta verify URL extracts address', () async {
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+        await client.getPaymentsByQRCodeAsync('$baseUrl/v2/verify/bc1qabc123');
+        expect(urls[0].pathSegments.last, equals('bc1qabc123'));
+        client.dispose();
+      });
+
+      test('Branta zk-verify URL extracts id and secret from fragment', () async {
+        const secret = 'zk-frag-secret';
+        const originalAddress = 'bc1qzkaddr';
+        final encrypted = await AesEncryption.encrypt(originalAddress, secret);
+        final payment = Payment(
+          destinations: [Destination(value: encrypted, zk: true)],
+          ttl: 3600,
+        );
+
+        late Uri capturedUrl;
+        final client = makeClient(MockClient((req) async {
+          capturedUrl = req.url;
+          return http.Response(json.encode([payment.toJson()]), 200);
+        }));
+
+        final result = await client.getPaymentsByQRCodeAsync(
+          '$baseUrl/v2/zk-verify/ZK_PAYMENT_ID#secret=$secret',
+        );
+
+        expect(capturedUrl.toString(), equals('$baseUrl/v2/payments/ZK_PAYMENT_ID'));
+        expect(result[0].destinations[0].value, equals(originalAddress));
+        client.dispose();
+      });
+
+      test('plain address is used as-is', () async {
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+        await client.getPaymentsByQRCodeAsync('1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf');
+        expect(urls[0].pathSegments.last, equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf'));
+        client.dispose();
+      });
+    });
   });
 }
