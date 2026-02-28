@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import '../models/payment.dart';
 import '../config/branta_config.dart';
 import '../../helpers/aes_encryption.dart' as encryption;
@@ -65,11 +66,34 @@ class BrantaClient {
     return payments;
   }
 
+  Map<String, String> _buildHmacHeaders(
+    String method,
+    String url,
+    String body,
+  ) {
+    final timestamp =
+        (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
+    final message = '$method|${config.baseUrl}$url|$body|$timestamp';
+    final digest = Hmac(sha256, utf8.encode(config.hmacSecret!))
+        .convert(utf8.encode(message));
+    return {
+      'X-HMAC-Signature': digest.toString(),
+      'X-HMAC-Timestamp': timestamp,
+    };
+  }
+
   Future<Payment> addPaymentAsync(Payment payment) async {
+    final body = json.encode(payment.toJson());
+    final headers = _getHeaders();
+
+    if (config.hmacSecret != null) {
+      headers.addAll(_buildHmacHeaders('POST', '/v2/payments', body));
+    }
+
     final response = await _httpClient.post(
       Uri.parse('${config.baseUrl}/v2/payments'),
-      headers: _getHeaders(),
-      body: json.encode(payment.toJson()),
+      headers: headers,
+      body: body,
     );
 
     return Payment.fromJson(json.decode(response.body));
