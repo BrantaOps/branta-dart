@@ -1,11 +1,13 @@
 // Run `make build` before running tests to generate *.g.dart files.
 import 'dart:convert';
+import 'dart:io';
 import 'package:branta/src/helpers/aes_encryption.dart';
 import 'package:branta/src/v2/classes/payment_builder.dart';
 import 'package:branta/src/v2/clients/branta_client.dart';
 import 'package:branta/src/v2/config/branta_config.dart';
 import 'package:branta/src/v2/models/destination.dart';
 import 'package:branta/src/v2/models/payment.dart';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
@@ -152,6 +154,62 @@ void main() {
       expect(config.baseUrl, equals('https://branta.pro'));
       expect(config.apiKey, isNull);
     });
+
+    test('custom constructor stores hmacSecret', () {
+      const config = BrantaConfig(
+        baseUrl: 'https://example.com',
+        hmacSecret: 'my-secret',
+      );
+
+      expect(config.hmacSecret, equals('my-secret'));
+    });
+
+    test('custom constructor allows null hmacSecret', () {
+      const config = BrantaConfig(baseUrl: 'https://example.com');
+
+      expect(config.hmacSecret, isNull);
+    });
+
+    test('development() stores hmacSecret', () {
+      final config = BrantaConfig.development(hmacSecret: 'dev-hmac');
+
+      expect(config.hmacSecret, equals('dev-hmac'));
+    });
+
+    test('production() stores hmacSecret', () {
+      final config = BrantaConfig.production(hmacSecret: 'prod-hmac');
+
+      expect(config.hmacSecret, equals('prod-hmac'));
+    });
+
+    test('fromEnvironment reads BRANTA_API_KEY and BRANTA_HMAC_SECRET from .env', () {
+      final envFile = File('.env.hmac_test');
+      envFile.writeAsStringSync(
+        'BRANTA_API_KEY=env-api-key\nBRANTA_HMAC_SECRET=env-hmac-secret\n',
+      );
+
+      final realEnv = File('.env');
+      final hadRealEnv = realEnv.existsSync();
+      final backupContent = hadRealEnv ? realEnv.readAsStringSync() : null;
+      envFile.copySync('.env');
+
+      try {
+        final config = BrantaConfig.fromEnvironment(
+          baseUrl: 'https://example.com',
+        );
+
+        expect(config.baseUrl, equals('https://example.com'));
+        expect(config.apiKey, equals('env-api-key'));
+        expect(config.hmacSecret, equals('env-hmac-secret'));
+      } finally {
+        if (hadRealEnv) {
+          realEnv.writeAsStringSync(backupContent!);
+        } else {
+          if (realEnv.existsSync()) realEnv.deleteSync();
+        }
+        if (envFile.existsSync()) envFile.deleteSync();
+      }
+    });
   });
 
   group('BrantaClient', () {
@@ -243,6 +301,136 @@ void main() {
       await client.addPaymentAsync(payment);
 
       expect(captured.headers.containsKey('Authorization'), isFalse);
+      client.dispose();
+    });
+
+    test('addPaymentAsync sends HMAC headers when hmacSecret is set', () async {
+      final payment = makePayment();
+
+      late http.Request captured;
+      final client = BrantaClient(
+        httpClient: MockClient((req) async {
+          captured = req;
+          return http.Response(json.encode(payment.toJson()), 200);
+        }),
+        config: BrantaConfig(
+          baseUrl: baseUrl,
+          apiKey: 'test-key',
+          hmacSecret: 'my-hmac-secret',
+        ),
+      );
+
+      await client.addPaymentAsync(payment);
+
+      expect(captured.headers.containsKey('X-HMAC-Signature'), isTrue);
+      expect(captured.headers.containsKey('X-HMAC-Timestamp'), isTrue);
+      client.dispose();
+    });
+
+    test('addPaymentAsync omits HMAC headers when hmacSecret is null', () async {
+      final payment = makePayment();
+
+      late http.Request captured;
+      final client = BrantaClient(
+        httpClient: MockClient((req) async {
+          captured = req;
+          return http.Response(json.encode(payment.toJson()), 200);
+        }),
+        config: BrantaConfig(baseUrl: baseUrl),
+      );
+
+      await client.addPaymentAsync(payment);
+
+      expect(captured.headers.containsKey('X-HMAC-Signature'), isFalse);
+      expect(captured.headers.containsKey('X-HMAC-Timestamp'), isFalse);
+      client.dispose();
+    });
+
+    test('addPaymentAsync HMAC signature is a valid 64-char lowercase hex string', () async {
+      final payment = makePayment();
+
+      late http.Request captured;
+      final client = BrantaClient(
+        httpClient: MockClient((req) async {
+          captured = req;
+          return http.Response(json.encode(payment.toJson()), 200);
+        }),
+        config: BrantaConfig(baseUrl: baseUrl, hmacSecret: 'my-hmac-secret'),
+      );
+
+      await client.addPaymentAsync(payment);
+
+      final signature = captured.headers['X-HMAC-Signature']!;
+      expect(signature.length, equals(64));
+      expect(RegExp(r'^[0-9a-f]+$').hasMatch(signature), isTrue);
+      client.dispose();
+    });
+
+    test('addPaymentAsync HMAC timestamp is a recent unix epoch second', () async {
+      final payment = makePayment();
+      final beforeSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      late http.Request captured;
+      final client = BrantaClient(
+        httpClient: MockClient((req) async {
+          captured = req;
+          return http.Response(json.encode(payment.toJson()), 200);
+        }),
+        config: BrantaConfig(baseUrl: baseUrl, hmacSecret: 'my-hmac-secret'),
+      );
+
+      await client.addPaymentAsync(payment);
+      final afterSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      final timestamp = int.parse(captured.headers['X-HMAC-Timestamp']!);
+      expect(timestamp, greaterThanOrEqualTo(beforeSec));
+      expect(timestamp, lessThanOrEqualTo(afterSec));
+      client.dispose();
+    });
+
+    test('addPaymentAsync HMAC signature matches expected computation', () async {
+      final payment = makePayment();
+      const hmacSecret = 'my-hmac-secret';
+
+      late http.Request captured;
+      final client = BrantaClient(
+        httpClient: MockClient((req) async {
+          captured = req;
+          return http.Response(json.encode(payment.toJson()), 200);
+        }),
+        config: BrantaConfig(baseUrl: baseUrl, hmacSecret: hmacSecret),
+      );
+
+      await client.addPaymentAsync(payment);
+
+      final signature = captured.headers['X-HMAC-Signature']!;
+      final timestamp = captured.headers['X-HMAC-Timestamp']!;
+      final body = captured.body;
+      final message = 'POST|$baseUrl/v2/payments|$body|$timestamp';
+      final expected = Hmac(sha256, utf8.encode(hmacSecret))
+          .convert(utf8.encode(message))
+          .toString();
+
+      expect(signature, equals(expected));
+      client.dispose();
+    });
+
+    test('addZKPaymentAsync sends HMAC headers via addPaymentAsync', () async {
+      final payment = makePayment();
+
+      late http.Request captured;
+      final client = BrantaClient(
+        httpClient: MockClient((req) async {
+          captured = req;
+          return http.Response(json.encode(payment.toJson()), 200);
+        }),
+        config: BrantaConfig(baseUrl: baseUrl, hmacSecret: 'zk-hmac-secret'),
+      );
+
+      await client.addZKPaymentAsync(payment);
+
+      expect(captured.headers.containsKey('X-HMAC-Signature'), isTrue);
+      expect(captured.headers.containsKey('X-HMAC-Timestamp'), isTrue);
       client.dispose();
     });
 

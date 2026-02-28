@@ -54,6 +54,30 @@ final payment = v2.PaymentBuilder()
 await client.addPaymentAsync(payment);
 ```
 
+## For Parent Platforms
+
+Parent platforms sign outbound payment requests with an HMAC secret so Branta can verify the request originated from your server.
+
+```dart
+import 'package:http/http.dart' as http;
+import 'package:branta/branta.dart' as v2;
+
+final client = v2.BrantaClient(
+    httpClient: http.Client(),
+    config: v2.BrantaConfig.production(
+        apiKey: '<api-key>',
+        hmacSecret: '<hmac-secret>',
+    ),
+);
+
+final payment = v2.PaymentBuilder()
+    .addDestination('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa')
+    .build();
+
+// X-HMAC-Signature and X-HMAC-Timestamp headers are added automatically
+await client.addPaymentAsync(payment);
+```
+
 ## Publishing
 ```
 dart pub login
@@ -76,6 +100,12 @@ v2.BrantaConfig.development(apiKey: 'your-api-key')
 
 // Custom (staging, self-hosted, etc.)
 v2.BrantaConfig(baseUrl: 'https://staging.example.com', apiKey: 'your-api-key')
+
+// With HMAC signing (parent platform)
+v2.BrantaConfig.production(apiKey: 'your-api-key', hmacSecret: 'your-hmac-secret')
+
+// From environment variables (BRANTA_API_KEY, BRANTA_HMAC_SECRET)
+v2.BrantaConfig.fromEnvironment(baseUrl: 'https://branta.pro')
 ```
 
 ## Feature Support
@@ -85,6 +115,6 @@ v2.BrantaConfig(baseUrl: 'https://staging.example.com', apiKey: 'your-api-key')
  - [X] V2 Get Payment by QR Code
  - [X] V2 Get decrypted Zero Knowledge by address and secret
  - [X] V2 Add Payment
- - [ ] V2 Payment by Parent Platform with HMAC
+ - [X] V2 Payment by Parent Platform with HMAC
  - [X] V2 Add Zero Knowledge Payment with secret
  - [ ] V2 Check API key valid
