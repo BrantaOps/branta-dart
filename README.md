@@ -23,8 +23,7 @@ import 'dart:convert';
 Future<void> main() async {
     var brantaClient = v2.BrantaClient(
         httpClient: http.Client(),
-        baseUrl: "http://localhost:3000",
-        apiKey: dotenv.getOrElse('BRANTA_API_KEY', () => ''),
+        config: v2.BrantaConfig.production(apiKey: 'your-api-key'),
     );
 
     try {
@@ -73,9 +72,24 @@ dart pub login
 dart pub publish
 ```
 
+## Configuration
+
+`BrantaConfig` lets you target different environments:
+
+```dart
+// Production (https://branta.pro)
+v2.BrantaConfig.production(apiKey: 'your-api-key')
+
+// Development (http://localhost:3000)
+v2.BrantaConfig.development(apiKey: 'your-api-key')
+
+// Custom (staging, self-hosted, etc.)
+v2.BrantaConfig(baseUrl: 'https://staging.example.com', apiKey: 'your-api-key')
+```
+
 ## Feature Support
 
- - [ ] Per Environment configuration
+ - [X] Per Environment configuration
  - [X] V2 Get Payment by address
  - [ ] V2 Get Payment by QR Code
  - [X] V2 Get decrypted Zero Knowledge by address and secret

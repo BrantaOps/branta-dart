@@ -1,25 +1,24 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../models/payment.dart';
+import '../config/branta_config.dart';
 import '../../helpers/aes_encryption.dart' as encryption;
 import 'package:uuid/uuid.dart';
 
 class BrantaClient {
   final http.Client _httpClient;
-  final String baseUrl;
-  final String? apiKey;
+  final BrantaConfig config;
 
   BrantaClient({
     required http.Client httpClient,
-    required this.baseUrl,
-    this.apiKey,
+    required this.config,
   }) : _httpClient = httpClient;
 
   Map<String, String> _getHeaders() {
     final headers = <String, String>{'Content-Type': 'application/json'};
 
-    if (apiKey != null) {
-      headers['Authorization'] = 'Bearer $apiKey';
+    if (config.apiKey != null) {
+      headers['Authorization'] = 'Bearer ${config.apiKey}';
     }
 
     return headers;
@@ -28,7 +27,7 @@ class BrantaClient {
   Future<List<Payment>> getPaymentsAsync(String address) async {
     try {
       final response = await _httpClient.get(
-        Uri.parse('$baseUrl/v2/payments/$address'),
+        Uri.parse('${config.baseUrl}/v2/payments/$address'),
       );
 
       if (response.statusCode != 200 || response.body.isEmpty) {
@@ -68,7 +67,7 @@ class BrantaClient {
 
   Future<Payment> addPaymentAsync(Payment payment) async {
     final response = await _httpClient.post(
-      Uri.parse('$baseUrl/v2/payments'),
+      Uri.parse('${config.baseUrl}/v2/payments'),
       headers: _getHeaders(),
       body: json.encode(payment.toJson()),
     );

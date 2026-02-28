@@ -8,10 +8,13 @@ Future<void> main() async {
   final dotenv = DotEnv();
   dotenv.load();
 
+  final config = v2.BrantaConfig.development(
+    apiKey: dotenv.getOrElse('BRANTA_API_KEY', () => ''),
+  );
+
   var brantaClient = v2.BrantaClient(
     httpClient: http.Client(),
-    baseUrl: "http://localhost:3000",
-    apiKey: dotenv.getOrElse('BRANTA_API_KEY', () => ''),
+    config: config,
   );
 
   try {
