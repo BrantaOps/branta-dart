@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:branta/src/helpers/aes_encryption.dart';
 import 'package:branta/src/v2/classes/payment_builder.dart';
 import 'package:branta/src/v2/clients/branta_client.dart';
+import 'package:branta/src/v2/config/branta_config.dart';
 import 'package:branta/src/v2/models/destination.dart';
 import 'package:branta/src/v2/models/payment.dart';
 import 'package:http/http.dart' as http;
@@ -110,6 +111,49 @@ void main() {
     });
   });
 
+  group('BrantaConfig', () {
+    test('custom constructor stores baseUrl and apiKey', () {
+      const config = BrantaConfig(baseUrl: 'https://example.com', apiKey: 'key');
+
+      expect(config.baseUrl, equals('https://example.com'));
+      expect(config.apiKey, equals('key'));
+    });
+
+    test('custom constructor allows null apiKey', () {
+      const config = BrantaConfig(baseUrl: 'https://example.com');
+
+      expect(config.apiKey, isNull);
+    });
+
+    test('development() sets localhost baseUrl', () {
+      final config = BrantaConfig.development(apiKey: 'dev-key');
+
+      expect(config.baseUrl, equals('http://localhost:3000'));
+      expect(config.apiKey, equals('dev-key'));
+    });
+
+    test('development() allows null apiKey', () {
+      final config = BrantaConfig.development();
+
+      expect(config.baseUrl, equals('http://localhost:3000'));
+      expect(config.apiKey, isNull);
+    });
+
+    test('production() sets branta.pro baseUrl', () {
+      final config = BrantaConfig.production(apiKey: 'prod-key');
+
+      expect(config.baseUrl, equals('https://branta.pro'));
+      expect(config.apiKey, equals('prod-key'));
+    });
+
+    test('production() allows null apiKey', () {
+      final config = BrantaConfig.production();
+
+      expect(config.baseUrl, equals('https://branta.pro'));
+      expect(config.apiKey, isNull);
+    });
+  });
+
   group('BrantaClient', () {
     const baseUrl = 'http://localhost:3000';
 
@@ -120,7 +164,7 @@ void main() {
     test('getPaymentsAsync returns empty list on non-200', () async {
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response('', 404)),
-        baseUrl: baseUrl,
+        config: BrantaConfig(baseUrl: baseUrl),
       );
 
       expect(await client.getPaymentsAsync('addr1'), isEmpty);
@@ -130,7 +174,7 @@ void main() {
     test('getPaymentsAsync returns empty list on empty body', () async {
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response('', 200)),
-        baseUrl: baseUrl,
+        config: BrantaConfig(baseUrl: baseUrl),
       );
 
       expect(await client.getPaymentsAsync('addr1'), isEmpty);
@@ -143,7 +187,7 @@ void main() {
 
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response(body, 200)),
-        baseUrl: baseUrl,
+        config: BrantaConfig(baseUrl: baseUrl),
       );
 
       final result = await client.getPaymentsAsync('addr1');
@@ -155,7 +199,7 @@ void main() {
     test('getPaymentsAsync returns empty list on network exception', () async {
       final client = BrantaClient(
         httpClient: MockClient((_) async => throw Exception('network error')),
-        baseUrl: baseUrl,
+        config: BrantaConfig(baseUrl: baseUrl),
       );
 
       expect(await client.getPaymentsAsync('addr1'), isEmpty);
@@ -172,8 +216,7 @@ void main() {
           captured = req;
           return http.Response(responseBody, 200);
         }),
-        baseUrl: baseUrl,
-        apiKey: 'test-key',
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
       );
 
       final result = await client.addPaymentAsync(payment);
@@ -194,7 +237,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        baseUrl: baseUrl,
+        config: BrantaConfig(baseUrl: baseUrl),
       );
 
       await client.addPaymentAsync(payment);
@@ -220,7 +263,7 @@ void main() {
         httpClient: MockClient(
           (_) async => http.Response(json.encode([payment.toJson()]), 200),
         ),
-        baseUrl: baseUrl,
+        config: BrantaConfig(baseUrl: baseUrl),
       );
 
       final result = await client.getZKPaymentsAsync('addr1', secret);
