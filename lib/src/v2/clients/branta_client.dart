@@ -94,6 +94,61 @@ class BrantaClient {
     return (responsePayment, secret);
   }
 
+  Future<List<Payment>> getPaymentsByQRCodeAsync(String qrText) async {
+    String text = qrText.trim();
+
+    // Check for ZK query params (branta_id + branta_secret)
+    final queryIndex = text.indexOf('?');
+    if (queryIndex != -1) {
+      final queryParams = Uri.splitQueryString(text.substring(queryIndex + 1));
+      final brantaId = queryParams['branta_id'];
+      final brantaSecret = queryParams['branta_secret'];
+      if (brantaId != null && brantaSecret != null) {
+        return getZKPaymentsAsync(brantaId, brantaSecret);
+      }
+      text = text.substring(0, queryIndex);
+    }
+
+    // Check if text is a Branta verify URL matching config.baseUrl
+    final parsed = Uri.tryParse(text);
+    if (parsed != null && (parsed.scheme == 'http' || parsed.scheme == 'https')) {
+      final configUri = Uri.tryParse(config.baseUrl);
+      if (configUri != null && parsed.origin == configUri.origin) {
+        final segments = parsed.pathSegments;
+        if (segments.length >= 3 && segments[0] == 'v2' && segments[1] == 'verify') {
+          return getPaymentsAsync(segments[2]);
+        }
+        if (segments.length >= 3 && segments[0] == 'v2' && segments[1] == 'zk-verify') {
+          final fragmentParams = Uri.splitQueryString(parsed.fragment);
+          final secret = fragmentParams['secret'];
+          if (secret != null) {
+            return getZKPaymentsAsync(segments[2], secret);
+          }
+          return getPaymentsAsync(segments[2]);
+        }
+        if (segments.isNotEmpty) {
+          return getPaymentsAsync(segments.last);
+        }
+      }
+    }
+
+    // Strip protocol prefixes and normalize case
+    final lower = text.toLowerCase();
+    if (lower.startsWith('lightning:')) {
+      text = text.substring('lightning:'.length).toLowerCase();
+    } else if (lower.startsWith('bitcoin:')) {
+      text = text.substring('bitcoin:'.length);
+      final lowerText = text.toLowerCase();
+      if (lowerText.startsWith('bc1q') || lowerText.startsWith('bcrt')) {
+        text = lowerText;
+      }
+    } else if (lower.startsWith('lnbc') || lower.startsWith('bc1q')) {
+      text = lower;
+    }
+
+    return getPaymentsAsync(text);
+  }
+
   void dispose() {
     _httpClient.close();
   }
