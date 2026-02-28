@@ -84,6 +84,10 @@ dart pub login
 ```
 
 ```
+dart pub bump patch
+```
+
+```
 dart pub publish
 ```
 
