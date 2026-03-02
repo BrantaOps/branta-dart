@@ -9,3 +9,5 @@ pubspec.lock
 
 .env
 **/*.g.dart
+
+.claude-ticket.md

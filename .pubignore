@@ -1,0 +1,13 @@
+# Patterns carried over from .gitignore (pubignore replaces gitignore)
+.dart_tool/
+build/
+pubspec.lock
+.env
+**/*.g.dart
+.claude-ticket.md
+
+# Development/internal files not needed by package consumers
+CLAUDE.md
+Makefile
+analysis_options.yaml
+test/
