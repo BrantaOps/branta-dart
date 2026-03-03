@@ -38,3 +38,7 @@ All new features and bug fixes require unit tests that bring the relevant code t
 **New features:** write the implementation, then add tests covering all branches and edge cases.
 
 **Bug fixes:** use TDD — write a failing test that reproduces the bug first, confirm it fails, then fix the code until the test passes. This proves the bug existed and is now resolved.
+
+<!-- TICKET-CONTEXT -->
+> Claude: read `.claude-ticket.md` in this directory for ticket context. Print its contents so the user can confirm it loaded correctly, then wait for explicit instructions before starting any work.
+<!-- TICKET-CONTEXT -->
