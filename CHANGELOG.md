@@ -1,3 +1,7 @@
+## 0.0.3
+
+- [#10](https://github.com/BrantaOps/branta-dart/issues/10) Add `.pubignore` to exclude development files (tests, Makefile, CLAUDE.md) from the published package
+
 ## 0.0.2
 
 - [#2](https://github.com/BrantaOps/branta-dart/issues/2) Allow configuration per environment via `BrantaConfig`
