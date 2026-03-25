@@ -1,0 +1,45 @@
+name: Dart
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: ["stable"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ matrix.sdk }}
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Generate code
+        run: dart run build_runner build
+
+      - name: Analyze
+        run: dart analyze
+
+      - name: Test with coverage
+        run: dart test --coverage=coverage
+
+      - name: Format coverage (lcov)
+        run: dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.sdk }}
+          path: coverage
+          if-no-files-found: ignore
