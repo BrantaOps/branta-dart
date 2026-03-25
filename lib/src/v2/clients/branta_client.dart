@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import '../models/payment.dart';
 import '../config/branta_config.dart';
 import '../../helpers/aes_encryption.dart' as encryption;
+import '../../exceptions/branta_payment_exception.dart';
 import 'package:uuid/uuid.dart';
 
 class BrantaClient {
@@ -26,22 +27,41 @@ class BrantaClient {
   }
 
   Future<List<Payment>> getPaymentsAsync(String address) async {
+    List<Payment> payments;
     try {
       final response = await _httpClient.get(
-        Uri.parse('${config.baseUrl}/v2/payments/$address'),
+        Uri.parse('${config.baseUrl}/v2/payments/${Uri.encodeComponent(address)}'),
       );
 
-      if (response.statusCode != 200 || response.body.isEmpty) {
+      if (response.statusCode < 200 || response.statusCode >= 300 || response.body.isEmpty) {
         return [];
       }
 
       final List<dynamic> jsonList = json.decode(response.body);
-      return jsonList
+      payments = jsonList
           .map((json) => Payment.fromJson(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
       return [];
     }
+
+    // Validate that platformLogoUrl (if present) belongs to the configured base domain.
+    // This prevents a malicious server from pointing logo URLs to arbitrary domains.
+    final baseOrigin = Uri.parse(config.baseUrl).origin;
+    for (final payment in payments) {
+      final logoUrl = payment.platformLogoUrl;
+      if (logoUrl != null && logoUrl.isNotEmpty) {
+        final logoUri = Uri.tryParse(logoUrl);
+        if (logoUri == null || logoUri.origin != baseOrigin) {
+          throw BrantaPaymentException(
+            'platformLogoUrl domain does not match the configured baseUrl domain',
+          );
+        }
+      }
+      payment.verifyUrl = _buildVerifyUrl(address);
+    }
+
+    return payments;
   }
 
   Future<List<Payment>> getZKPaymentsAsync(
@@ -61,6 +81,10 @@ class BrantaClient {
           secret,
         );
       }
+    }
+
+    for (final payment in payments) {
+      payment.verifyUrl = _buildVerifyUrl(address, secret: secret);
     }
 
     return payments;
@@ -83,6 +107,10 @@ class BrantaClient {
   }
 
   Future<Payment> addPaymentAsync(Payment payment) async {
+    if (config.apiKey == null) {
+      throw BrantaPaymentException('Unauthorized');
+    }
+
     final body = json.encode(payment.toJson());
     final headers = _getHeaders();
 
@@ -96,11 +124,30 @@ class BrantaClient {
       body: body,
     );
 
-    return Payment.fromJson(json.decode(response.body));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw BrantaPaymentException(response.statusCode.toString());
+    }
+
+    final responsePayment = Payment.fromJson(json.decode(response.body));
+    responsePayment.verifyUrl = _buildVerifyUrl(payment.destinations.first.value);
+    return responsePayment;
+  }
+
+  Future<bool> isApiKeyValidAsync() async {
+    try {
+      final headers = _getHeaders();
+      final response = await _httpClient.get(
+        Uri.parse('${config.baseUrl}/v2/api-keys/health-check'),
+        headers: headers,
+      );
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<(Payment, String)> addZKPaymentAsync(Payment payment) async {
-    final secret = Uuid().v1();
+    final secret = Uuid().v4();
 
     for (var destination in payment.destinations) {
       if (destination.zk == false) {
@@ -114,8 +161,20 @@ class BrantaClient {
     }
 
     var responsePayment = await addPaymentAsync(payment);
+    responsePayment.verifyUrl = _buildVerifyUrl(
+      payment.destinations.first.value,
+      secret: secret,
+    );
 
     return (responsePayment, secret);
+  }
+
+  String _buildVerifyUrl(String address, {String? secret}) {
+    final encoded = Uri.encodeComponent(address);
+    if (secret != null) {
+      return '${config.baseUrl}/v2/zk-verify/$encoded#secret=$secret';
+    }
+    return '${config.baseUrl}/v2/verify/$encoded';
   }
 
   Future<List<Payment>> getPaymentsByQRCodeAsync(String qrText) async {
@@ -124,7 +183,9 @@ class BrantaClient {
     // Check for ZK query params (branta_id + branta_secret)
     final queryIndex = text.indexOf('?');
     if (queryIndex != -1) {
-      final queryParams = Uri.splitQueryString(text.substring(queryIndex + 1));
+      // Replace + with %2B before parsing to preserve literal + signs (Uri.splitQueryString decodes + as space).
+      final rawQuery = text.substring(queryIndex + 1).replaceAll('+', '%2B');
+      final queryParams = Uri.splitQueryString(rawQuery);
       final brantaId = queryParams['branta_id'];
       final brantaSecret = queryParams['branta_secret'];
       if (brantaId != null && brantaSecret != null) {
@@ -143,7 +204,7 @@ class BrantaClient {
           return getPaymentsAsync(segments[2]);
         }
         if (segments.length >= 3 && segments[0] == 'v2' && segments[1] == 'zk-verify') {
-          final fragmentParams = Uri.splitQueryString(parsed.fragment);
+          final fragmentParams = Uri.splitQueryString(parsed.fragment.replaceAll('+', '%2B'));
           final secret = fragmentParams['secret'];
           if (secret != null) {
             return getZKPaymentsAsync(segments[2], secret);

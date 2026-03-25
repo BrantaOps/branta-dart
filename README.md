@@ -121,4 +121,4 @@ v2.BrantaConfig.fromEnvironment(baseUrl: 'https://branta.pro')
  - [X] V2 Add Payment
  - [X] V2 Payment by Parent Platform with HMAC
  - [X] V2 Add Zero Knowledge Payment with secret
- - [ ] V2 Check API key valid
+ - [X] V2 Check API key valid

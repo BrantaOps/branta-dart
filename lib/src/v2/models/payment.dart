@@ -19,6 +19,9 @@ class Payment {
   @JsonKey(name: 'platform_logo_url')
   final String? platformLogoUrl;
 
+  @JsonKey(name: 'verify_url')
+  String? verifyUrl;
+
   Payment({
     this.description,
     required this.destinations,
@@ -27,6 +30,7 @@ class Payment {
     this.metadata,
     this.platform,
     this.platformLogoUrl,
+    this.verifyUrl,
   });
 
   factory Payment.fromJson(Map<String, dynamic> json) =>
