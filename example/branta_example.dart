@@ -8,7 +8,7 @@ Future<void> main() async {
   final dotenv = DotEnv();
   dotenv.load();
 
-  final config = v2.BrantaConfig.development(
+  final config = v2.BrantaConfig.staging(
     apiKey: dotenv.getOrElse('BRANTA_API_KEY', () => ''),
   );
 
