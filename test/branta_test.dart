@@ -7,6 +7,7 @@ import 'package:branta/src/v2/classes/payment_builder.dart';
 import 'package:branta/src/v2/clients/branta_client.dart';
 import 'package:branta/src/v2/config/branta_config.dart';
 import 'package:branta/src/v2/models/destination.dart';
+import 'package:branta/src/v2/models/destination_type.dart';
 import 'package:branta/src/v2/models/payment.dart';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -111,6 +112,34 @@ void main() {
       expect(builder.setDescription('d'), same(builder));
       expect(builder.addMetadata('k', 'v'), same(builder));
       expect(builder.setTtl(100), same(builder));
+    });
+
+    test('addDestination with type sets type field', () {
+      final payment = PaymentBuilder()
+          .addDestination('addr1', false, DestinationType.bitcoinAddress)
+          .build();
+
+      expect(payment.destinations[0].type, equals(DestinationType.bitcoinAddress));
+    });
+
+    test('addDestination without type leaves type null', () {
+      final payment = PaymentBuilder().addDestination('addr1').build();
+
+      expect(payment.destinations[0].type, isNull);
+    });
+
+    test('addDestination type serializes to correct JSON value', () {
+      final destination = Destination(value: 'addr', type: DestinationType.bolt11);
+      final json = destination.toJson();
+
+      expect(json['type'], equals('bolt11'));
+    });
+
+    test('addDestination null type omits type from JSON', () {
+      final destination = Destination(value: 'addr');
+      final json = destination.toJson();
+
+      expect(json['type'], isNull);
     });
   });
 

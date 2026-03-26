@@ -1,12 +1,13 @@
 import 'package:branta/src/v2/models/destination.dart';
+import 'package:branta/src/v2/models/destination_type.dart';
 import 'package:branta/src/v2/models/payment.dart';
 import 'dart:convert';
 
 class PaymentBuilder {
   final Payment payment = Payment(destinations: [], ttl: 3600);
 
-  PaymentBuilder addDestination(String address, [bool zk = false]) {
-    payment.destinations.add(Destination(value: address, zk: zk));
+  PaymentBuilder addDestination(String address, [bool zk = false, DestinationType? type]) {
+    payment.destinations.add(Destination(value: address, zk: zk, type: type));
 
     return this;
   }
