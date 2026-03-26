@@ -1,11 +1,13 @@
 // Run `make build` before running tests to generate *.g.dart files.
 import 'dart:convert';
 import 'dart:io';
+import 'package:branta/src/exceptions/branta_payment_exception.dart';
 import 'package:branta/src/helpers/aes_encryption.dart';
 import 'package:branta/src/v2/classes/payment_builder.dart';
 import 'package:branta/src/v2/clients/branta_client.dart';
 import 'package:branta/src/v2/config/branta_config.dart';
 import 'package:branta/src/v2/models/destination.dart';
+import 'package:branta/src/v2/models/destination_type.dart';
 import 'package:branta/src/v2/models/payment.dart';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -111,6 +113,34 @@ void main() {
       expect(builder.addMetadata('k', 'v'), same(builder));
       expect(builder.setTtl(100), same(builder));
     });
+
+    test('addDestination with type sets type field', () {
+      final payment = PaymentBuilder()
+          .addDestination('addr1', false, DestinationType.bitcoinAddress)
+          .build();
+
+      expect(payment.destinations[0].type, equals(DestinationType.bitcoinAddress));
+    });
+
+    test('addDestination without type leaves type null', () {
+      final payment = PaymentBuilder().addDestination('addr1').build();
+
+      expect(payment.destinations[0].type, isNull);
+    });
+
+    test('addDestination type serializes to correct JSON value', () {
+      final destination = Destination(value: 'addr', type: DestinationType.bolt11);
+      final json = destination.toJson();
+
+      expect(json['type'], equals('bolt11'));
+    });
+
+    test('addDestination null type omits type from JSON', () {
+      final destination = Destination(value: 'addr');
+      final json = destination.toJson();
+
+      expect(json['type'], isNull);
+    });
   });
 
   group('BrantaConfig', () {
@@ -127,31 +157,38 @@ void main() {
       expect(config.apiKey, isNull);
     });
 
-    test('development() sets localhost baseUrl', () {
-      final config = BrantaConfig.development(apiKey: 'dev-key');
+    test('localhost() sets localhost baseUrl', () {
+      final config = BrantaConfig.localhost(apiKey: 'dev-key');
 
       expect(config.baseUrl, equals('http://localhost:3000'));
       expect(config.apiKey, equals('dev-key'));
     });
 
-    test('development() allows null apiKey', () {
-      final config = BrantaConfig.development();
+    test('localhost() allows null apiKey', () {
+      final config = BrantaConfig.localhost();
 
       expect(config.baseUrl, equals('http://localhost:3000'));
       expect(config.apiKey, isNull);
     });
 
-    test('production() sets branta.pro baseUrl', () {
+    test('staging() sets staging baseUrl', () {
+      final config = BrantaConfig.staging(apiKey: 'staging-key');
+
+      expect(config.baseUrl, equals('https://staging.guardrail.branta.pro'));
+      expect(config.apiKey, equals('staging-key'));
+    });
+
+    test('production() sets guardrail.branta.pro baseUrl', () {
       final config = BrantaConfig.production(apiKey: 'prod-key');
 
-      expect(config.baseUrl, equals('https://branta.pro'));
+      expect(config.baseUrl, equals('https://guardrail.branta.pro'));
       expect(config.apiKey, equals('prod-key'));
     });
 
     test('production() allows null apiKey', () {
       final config = BrantaConfig.production();
 
-      expect(config.baseUrl, equals('https://branta.pro'));
+      expect(config.baseUrl, equals('https://guardrail.branta.pro'));
       expect(config.apiKey, isNull);
     });
 
@@ -170,8 +207,8 @@ void main() {
       expect(config.hmacSecret, isNull);
     });
 
-    test('development() stores hmacSecret', () {
-      final config = BrantaConfig.development(hmacSecret: 'dev-hmac');
+    test('localhost() stores hmacSecret', () {
+      final config = BrantaConfig.localhost(hmacSecret: 'dev-hmac');
 
       expect(config.hmacSecret, equals('dev-hmac'));
     });
@@ -218,6 +255,66 @@ void main() {
     Payment makePayment([String address = 'addr1']) {
       return Payment(destinations: [Destination(value: address)], ttl: 3600);
     }
+
+    test('getPaymentsAsync URL-encodes address in request path', () async {
+      late http.Request captured;
+      final client = BrantaClient(
+        httpClient: MockClient((req) async {
+          captured = req;
+          return http.Response('[]', 200);
+        }),
+        config: BrantaConfig(baseUrl: baseUrl),
+      );
+
+      await client.getPaymentsAsync('addr+with+plus');
+
+      expect(captured.url.toString(), equals('$baseUrl/v2/payments/addr%2Bwith%2Bplus'));
+      client.dispose();
+    });
+
+    test('getPaymentsAsync throws when platformLogoUrl domain does not match baseUrl', () async {
+      final payment = makePayment();
+      final paymentWithLogo = Payment(
+        destinations: payment.destinations,
+        ttl: payment.ttl,
+        platformLogoUrl: 'https://evil.com/logo.png',
+      );
+      final body = json.encode([paymentWithLogo.toJson()]);
+
+      final client = BrantaClient(
+        httpClient: MockClient((_) async => http.Response(body, 200)),
+        config: BrantaConfig(baseUrl: baseUrl),
+      );
+
+      expect(
+        () => client.getPaymentsAsync('addr1'),
+        throwsA(isA<BrantaPaymentException>().having(
+          (e) => e.toString(),
+          'message',
+          contains('platformLogoUrl domain does not match'),
+        )),
+      );
+      client.dispose();
+    });
+
+    test('getPaymentsAsync allows platformLogoUrl from the same domain', () async {
+      final payment = makePayment();
+      final paymentWithLogo = Payment(
+        destinations: payment.destinations,
+        ttl: payment.ttl,
+        platformLogoUrl: '$baseUrl/logo.png',
+      );
+      final body = json.encode([paymentWithLogo.toJson()]);
+
+      final client = BrantaClient(
+        httpClient: MockClient((_) async => http.Response(body, 200)),
+        config: BrantaConfig(baseUrl: baseUrl),
+      );
+
+      final result = await client.getPaymentsAsync('addr1');
+      expect(result.length, equals(1));
+      client.dispose();
+    });
 
     test('getPaymentsAsync returns empty list on non-200', () async {
       final client = BrantaClient(
@@ -286,21 +383,41 @@ void main() {
       client.dispose();
     });
 
-    test('addPaymentAsync omits Authorization header when apiKey is null', () async {
+    test('addPaymentAsync throws Unauthorized when apiKey is null', () async {
       final payment = makePayment();
 
-      late http.Request captured;
       final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response(json.encode(payment.toJson()), 200);
-        }),
+        httpClient: MockClient((_) async => http.Response('', 200)),
         config: BrantaConfig(baseUrl: baseUrl),
       );
 
-      await client.addPaymentAsync(payment);
+      expect(
+        () => client.addPaymentAsync(payment),
+        throwsA(isA<BrantaPaymentException>().having(
+          (e) => e.toString(),
+          'message',
+          contains('Unauthorized'),
+        )),
+      );
+      client.dispose();
+    });
 
-      expect(captured.headers.containsKey('Authorization'), isFalse);
+    test('addPaymentAsync throws on non-2xx response', () async {
+      final payment = makePayment();
+
+      final client = BrantaClient(
+        httpClient: MockClient((_) async => http.Response('Bad Request', 400)),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+      );
+
+      expect(
+        () => client.addPaymentAsync(payment),
+        throwsA(isA<BrantaPaymentException>().having(
+          (e) => e.toString(),
+          'message',
+          contains('400'),
+        )),
+      );
       client.dispose();
     });
 
@@ -336,7 +453,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
       );
 
       await client.addPaymentAsync(payment);
@@ -355,7 +472,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, hmacSecret: 'my-hmac-secret'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'my-hmac-secret'),
       );
 
       await client.addPaymentAsync(payment);
@@ -376,7 +493,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, hmacSecret: 'my-hmac-secret'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'my-hmac-secret'),
       );
 
       await client.addPaymentAsync(payment);
@@ -398,7 +515,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, hmacSecret: hmacSecret),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: hmacSecret),
       );
 
       await client.addPaymentAsync(payment);
@@ -424,7 +541,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, hmacSecret: 'zk-hmac-secret'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'zk-hmac-secret'),
       );
 
       await client.addZKPaymentAsync(payment);
@@ -459,6 +576,66 @@ void main() {
       expect(result[0].destinations[0].value, equals(originalAddress));
       expect(result[0].destinations[1].value, equals('plain-addr'));
       client.dispose();
+    });
+
+    group('isApiKeyValidAsync', () {
+      test('returns true on 200', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => http.Response('', 200)),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+        );
+        expect(await client.isApiKeyValidAsync(), isTrue);
+        client.dispose();
+      });
+
+      test('returns false on 401', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => http.Response('', 401)),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'bad-key'),
+        );
+        expect(await client.isApiKeyValidAsync(), isFalse);
+        client.dispose();
+      });
+
+      test('sends Authorization header with api key', () async {
+        late http.Request captured;
+        final client = BrantaClient(
+          httpClient: MockClient((req) async {
+            captured = req;
+            return http.Response('', 200);
+          }),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
+        );
+        await client.isApiKeyValidAsync();
+        expect(captured.headers['Authorization'], equals('Bearer my-key'));
+        client.dispose();
+      });
+
+      test('requests correct endpoint', () async {
+        late http.Request captured;
+        final client = BrantaClient(
+          httpClient: MockClient((req) async {
+            captured = req;
+            return http.Response('', 200);
+          }),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
+        );
+        await client.isApiKeyValidAsync();
+        expect(
+          captured.url.toString(),
+          equals('$baseUrl/v2/api-keys/health-check'),
+        );
+        client.dispose();
+      });
+
+      test('returns false on network exception', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => throw Exception('network error')),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
+        );
+        expect(await client.isApiKeyValidAsync(), isFalse);
+        client.dispose();
+      });
     });
 
     group('getPaymentsByQRCodeAsync', () {
@@ -583,6 +760,43 @@ void main() {
         client.dispose();
       });
 
+      test('branta_id containing + is preserved (not decoded as space)', () async {
+        const brantaId = 'KEY+WITH+PLUS==';
+        final (mock, urls) = capturingMock();
+        final client = makeClient(mock);
+
+        await client.getPaymentsByQRCodeAsync(
+          'http://example.com?branta_id=${Uri.encodeComponent(brantaId)}&branta_secret=secret',
+        );
+
+        expect(
+          Uri.decodeComponent(urls[0].pathSegments.last),
+          equals(brantaId),
+        );
+        client.dispose();
+      });
+
+      test('fragment secret containing + is preserved (not decoded as space)', () async {
+        const secret = 'SECRET+WITH+PLUS';
+        const originalAddress = 'bc1qzkaddr';
+        final encrypted = await AesEncryption.encrypt(originalAddress, secret);
+        final payment = Payment(
+          destinations: [Destination(value: encrypted, zk: true)],
+          ttl: 3600,
+        );
+
+        final client = makeClient(MockClient(
+          (_) async => http.Response(json.encode([payment.toJson()]), 200),
+        ));
+
+        final result = await client.getPaymentsByQRCodeAsync(
+          '$baseUrl/v2/zk-verify/ZKID#secret=${Uri.encodeComponent(secret)}',
+        );
+
+        expect(result[0].destinations[0].value, equals(originalAddress));
+        client.dispose();
+      });
+
       test('plain address is used as-is', () async {
         final (mock, urls) = capturingMock();
         final client = makeClient(mock);
@@ -590,6 +804,82 @@ void main() {
         expect(urls[0].pathSegments.last, equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf'));
         client.dispose();
       });
+    });
+
+    test('getPaymentsAsync sets verifyUrl on returned payments', () async {
+      final payment = makePayment('bc1qabc');
+      final client = BrantaClient(
+        httpClient: MockClient(
+          (_) async => http.Response(json.encode([payment.toJson()]), 200),
+        ),
+        config: BrantaConfig(baseUrl: baseUrl),
+      );
+
+      final result = await client.getPaymentsAsync('bc1qabc');
+
+      expect(result[0].verifyUrl, equals('$baseUrl/v2/verify/bc1qabc'));
+      client.dispose();
+    });
+
+    test('getZKPaymentsAsync sets ZK verifyUrl with secret fragment on returned payments', () async {
+      const secret = 'test-secret';
+      const address = 'bc1qabc';
+      final encrypted = await AesEncryption.encrypt(address, secret);
+      final payment = Payment(
+        destinations: [Destination(value: encrypted, zk: true)],
+        ttl: 3600,
+      );
+      final client = BrantaClient(
+        httpClient: MockClient(
+          (_) async => http.Response(json.encode([payment.toJson()]), 200),
+        ),
+        config: BrantaConfig(baseUrl: baseUrl),
+      );
+
+      final result = await client.getZKPaymentsAsync(address, secret);
+
+      expect(
+        result[0].verifyUrl,
+        equals('$baseUrl/v2/zk-verify/${Uri.encodeComponent(address)}#secret=$secret'),
+      );
+      client.dispose();
+    });
+
+    test('addPaymentAsync sets verifyUrl on returned payment', () async {
+      final payment = makePayment('bc1qabc');
+      final client = BrantaClient(
+        httpClient: MockClient(
+          (_) async => http.Response(json.encode(payment.toJson()), 200),
+        ),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+      );
+
+      final result = await client.addPaymentAsync(payment);
+
+      expect(result.verifyUrl, equals('$baseUrl/v2/verify/bc1qabc'));
+      client.dispose();
+    });
+
+    test('addZKPaymentAsync sets ZK verifyUrl on returned payment', () async {
+      const address = 'bc1qabc';
+      final payment = makePayment(address);
+      late String capturedEncryptedAddress;
+      final client = BrantaClient(
+        httpClient: MockClient((req) async {
+          final body = json.decode(req.body) as Map<String, dynamic>;
+          capturedEncryptedAddress = (body['destinations'] as List).first['value'] as String;
+          return http.Response(json.encode(payment.toJson()), 200);
+        }),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+      );
+
+      final (result, secret) = await client.addZKPaymentAsync(payment);
+
+      expect(
+        result.verifyUrl,
+        equals('$baseUrl/v2/zk-verify/${Uri.encodeComponent(capturedEncryptedAddress)}#secret=$secret'),
+      );
+      client.dispose();
     });
   });
 }

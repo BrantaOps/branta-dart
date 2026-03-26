@@ -7,16 +7,23 @@ class BrantaConfig {
 
   const BrantaConfig({required this.baseUrl, this.apiKey, this.hmacSecret});
 
-  factory BrantaConfig.development({String? apiKey, String? hmacSecret}) =>
+  factory BrantaConfig.staging({String? apiKey, String? hmacSecret}) =>
       BrantaConfig(
-        baseUrl: 'http://localhost:3000',
+        baseUrl: 'https://staging.guardrail.branta.pro',
         apiKey: apiKey,
         hmacSecret: hmacSecret,
       );
 
   factory BrantaConfig.production({String? apiKey, String? hmacSecret}) =>
       BrantaConfig(
-        baseUrl: 'https://branta.pro',
+        baseUrl: 'https://guardrail.branta.pro',
+        apiKey: apiKey,
+        hmacSecret: hmacSecret,
+      );
+
+  factory BrantaConfig.localhost({String? apiKey, String? hmacSecret}) =>
+      BrantaConfig(
+        baseUrl: 'http://localhost:3000',
         apiKey: apiKey,
         hmacSecret: hmacSecret,
       );
