@@ -1,3 +1,13 @@
+## 1.0.0
+
+- SDK parity with `branta-core`: `getPaymentsAsync`, `getZKPaymentsAsync`, `addPaymentAsync` now return/throw `BrantaPaymentException` on errors instead of silently returning empty lists
+- `addPaymentAsync` throws `BrantaPaymentException('Unauthorized')` when no API key is configured
+- `getPaymentsAsync` validates `platformLogoUrl` domain against configured `baseUrl` to prevent open redirect attacks
+- Payments returned from all fetch methods now include a `verifyUrl` built from the configured base URL
+- Address parameter in `getPaymentsAsync` is now URL-encoded
+- Added `DestinationType` enum and `type` field on `Destination`
+- Added CI/CD workflow via GitHub Actions
+
 ## 0.0.3
 
 - [#10](https://github.com/BrantaOps/branta-dart/issues/10) Add `.pubignore` to exclude development files (tests, Makefile, CLAUDE.md) from the published package
