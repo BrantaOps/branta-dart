@@ -141,6 +141,20 @@ void main() {
 
       expect(json['type'], isNull);
     });
+
+    test('addDestination type ln_address serializes to correct JSON value', () {
+      final destination = Destination(value: 'addr', type: DestinationType.lnAddress);
+      final json = destination.toJson();
+
+      expect(json['type'], equals('ln_address'));
+    });
+
+    test('addDestination type ark_address serializes to correct JSON value', () {
+      final destination = Destination(value: 'addr', type: DestinationType.arkAddress);
+      final json = destination.toJson();
+
+      expect(json['type'], equals('ark_address'));
+    });
   });
 
   group('BrantaConfig', () {
