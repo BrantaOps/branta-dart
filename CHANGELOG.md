@@ -1,3 +1,7 @@
+## 1.0.1
+
+- [#15](https://github.com/BrantaOps/branta-dart/issues/15) Added `ark` and `ln_address` destination types to `DestinationType` enum
+
 ## 1.0.0
 
 - SDK parity with `branta-core`: `getPaymentsAsync`, `getZKPaymentsAsync`, `addPaymentAsync` now return/throw `BrantaPaymentException` on errors instead of silently returning empty lists
