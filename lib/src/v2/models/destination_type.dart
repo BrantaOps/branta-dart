@@ -11,4 +11,8 @@ enum DestinationType {
   lnUrl,
   @JsonValue('tether_address')
   tetherAddress,
+  @JsonValue('ln_address')
+  lnAddress,
+  @JsonValue('ark_address')
+  arkAddress,
 }
