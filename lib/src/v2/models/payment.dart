@@ -19,6 +19,9 @@ class Payment {
   @JsonKey(name: 'platform_logo_url')
   final String? platformLogoUrl;
 
+  @JsonKey(name: 'platform_logo_light_url')
+  final String? platformLogoLightUrl;
+
   @JsonKey(name: 'verify_url')
   String? verifyUrl;
 
@@ -30,6 +33,7 @@ class Payment {
     this.metadata,
     this.platform,
     this.platformLogoUrl,
+    this.platformLogoLightUrl,
     this.verifyUrl,
   });
 
