@@ -1,3 +1,7 @@
+## 1.0.2
+
+- [#18](https://github.com/BrantaOps/branta-dart/issues/18) Add platform_logo_light_url to payment
+
 ## 1.0.1
 
 - [#15](https://github.com/BrantaOps/branta-dart/issues/15) Added `ark` and `ln_address` destination types to `DestinationType` enum
