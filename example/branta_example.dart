@@ -10,6 +10,7 @@ Future<void> main() async {
 
   final config = v2.BrantaConfig.staging(
     apiKey: dotenv.getOrElse('BRANTA_API_KEY', () => ''),
+    privacy: v2.PrivacyMode.loose,
   );
 
   var brantaClient = v2.BrantaClient(

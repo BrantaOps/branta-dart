@@ -22,7 +22,7 @@ import 'package:branta/branta.dart' as v2;
 
 final client = v2.BrantaClient(
     httpClient: http.Client(),
-    config: v2.BrantaConfig.production(),
+    config: v2.BrantaConfig.production(privacy: v2.PrivacyMode.loose),
 );
 
 // Lookup by address
@@ -42,7 +42,7 @@ import 'package:branta/branta.dart' as v2;
 
 final client = v2.BrantaClient(
     httpClient: http.Client(),
-    config: v2.BrantaConfig.production(apiKey: '<api-key>'),
+    config: v2.BrantaConfig.production(apiKey: '<api-key>', privacy: v2.PrivacyMode.loose),
 );
 
 final payment = v2.PaymentBuilder()
@@ -67,6 +67,7 @@ final client = v2.BrantaClient(
     config: v2.BrantaConfig.production(
         apiKey: '<api-key>',
         hmacSecret: '<hmac-secret>',
+        privacy: v2.PrivacyMode.loose,
     ),
 );
 
@@ -97,19 +98,19 @@ dart pub publish
 
 ```dart
 // Production (https://branta.pro)
-v2.BrantaConfig.production(apiKey: 'your-api-key')
+v2.BrantaConfig.production(apiKey: 'your-api-key', privacy: v2.PrivacyMode.loose)
 
 // Development (http://localhost:3000)
-v2.BrantaConfig.development(apiKey: 'your-api-key')
+v2.BrantaConfig.localhost(apiKey: 'your-api-key', privacy: v2.PrivacyMode.loose)
 
 // Custom (staging, self-hosted, etc.)
-v2.BrantaConfig(baseUrl: 'https://staging.example.com', apiKey: 'your-api-key')
+v2.BrantaConfig(baseUrl: 'https://staging.example.com', apiKey: 'your-api-key', privacy: v2.PrivacyMode.loose)
 
 // With HMAC signing (parent platform)
-v2.BrantaConfig.production(apiKey: 'your-api-key', hmacSecret: 'your-hmac-secret')
+v2.BrantaConfig.production(apiKey: 'your-api-key', hmacSecret: 'your-hmac-secret', privacy: v2.PrivacyMode.loose)
 
 // From environment variables (BRANTA_API_KEY, BRANTA_HMAC_SECRET)
-v2.BrantaConfig.fromEnvironment(baseUrl: 'https://branta.pro')
+v2.BrantaConfig.fromEnvironment(baseUrl: 'https://branta.pro', privacy: v2.PrivacyMode.loose)
 ```
 
 ## Feature Support
@@ -122,3 +123,4 @@ v2.BrantaConfig.fromEnvironment(baseUrl: 'https://branta.pro')
  - [X] V2 Payment by Parent Platform with HMAC
  - [X] V2 Add Zero Knowledge Payment with secret
  - [X] V2 Check API key valid
+ - [X] Privacy mode (strict / loose)

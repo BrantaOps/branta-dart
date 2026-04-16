@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import '../models/payment.dart';
 import '../config/branta_config.dart';
+import '../config/privacy_mode.dart';
 import '../../helpers/aes_encryption.dart' as encryption;
 import '../../exceptions/branta_payment_exception.dart';
 import 'package:uuid/uuid.dart';
@@ -27,6 +28,16 @@ class BrantaClient {
   }
 
   Future<List<Payment>> getPaymentsAsync(String address) async {
+    if (config.privacy == PrivacyMode.strict) {
+      throw BrantaPaymentException(
+        "privacy is set to 'strict': plain on-chain address lookups are not permitted",
+      );
+    }
+
+    return _fetchPaymentsAsync(address);
+  }
+
+  Future<List<Payment>> _fetchPaymentsAsync(String address) async {
     List<Payment> payments;
     try {
       final response = await _httpClient.get(
@@ -68,7 +79,7 @@ class BrantaClient {
     String address,
     String secret,
   ) async {
-    final payments = await getPaymentsAsync(address);
+    final payments = await _fetchPaymentsAsync(address);
 
     for (var payment in payments) {
       for (var destination in payment.destinations) {
@@ -177,10 +188,15 @@ class BrantaClient {
     return '${config.baseUrl}/v2/verify/$encoded';
   }
 
+  Future<List<Payment>> _getPlainPaymentsAsync(String address) {
+    if (config.privacy == PrivacyMode.strict) return Future.value([]);
+    return _fetchPaymentsAsync(address);
+  }
+
   Future<List<Payment>> getPaymentsByQRCodeAsync(String qrText) async {
     String text = qrText.trim();
 
-    // Check for ZK query params (branta_id + branta_secret)
+    // ZK query params (branta_id + branta_secret) — always allowed regardless of privacy
     final queryIndex = text.indexOf('?');
     if (queryIndex != -1) {
       // Replace + with %2B before parsing to preserve literal + signs (Uri.splitQueryString decodes + as space).
@@ -194,25 +210,26 @@ class BrantaClient {
       text = text.substring(0, queryIndex);
     }
 
-    // Check if text is a Branta verify URL matching config.baseUrl
+    // http/https URL matching the configured base URL
     final parsed = Uri.tryParse(text);
     if (parsed != null && (parsed.scheme == 'http' || parsed.scheme == 'https')) {
       final configUri = Uri.tryParse(config.baseUrl);
       if (configUri != null && parsed.origin == configUri.origin) {
         final segments = parsed.pathSegments;
+
         if (segments.length >= 3 && segments[0] == 'v2' && segments[1] == 'verify') {
-          return getPaymentsAsync(segments[2]);
+          return _getPlainPaymentsAsync(segments[2]);
         }
+
         if (segments.length >= 3 && segments[0] == 'v2' && segments[1] == 'zk-verify') {
           final fragmentParams = Uri.splitQueryString(parsed.fragment.replaceAll('+', '%2B'));
           final secret = fragmentParams['secret'];
-          if (secret != null) {
-            return getZKPaymentsAsync(segments[2], secret);
-          }
-          return getPaymentsAsync(segments[2]);
+          if (secret != null) return getZKPaymentsAsync(segments[2], secret);
+          return _getPlainPaymentsAsync(segments[2]);
         }
+
         if (segments.isNotEmpty) {
-          return getPaymentsAsync(segments.last);
+          return _getPlainPaymentsAsync(segments.last);
         }
       }
     }
@@ -231,7 +248,7 @@ class BrantaClient {
       text = lower;
     }
 
-    return getPaymentsAsync(text);
+    return _getPlainPaymentsAsync(text);
   }
 
   void dispose() {
