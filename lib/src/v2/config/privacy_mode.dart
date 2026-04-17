@@ -4,7 +4,7 @@
 ///   lookups are permitted. Calling [BrantaClient.getPaymentsAsync] directly
 ///   will throw a [BrantaPaymentException]; plain-address branches inside
 ///   [BrantaClient.getPaymentsByQRCodeAsync] will silently return `[]`.
-///   Lightning invoices and all POST operations are unaffected by this setting.
+///   All POST operations are unaffected by this setting.
 ///
 /// - [PrivacyMode.loose] — Both plain and ZK on-chain lookups are allowed.
 ///   No restrictions are enforced.
