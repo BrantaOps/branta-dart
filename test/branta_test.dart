@@ -6,6 +6,7 @@ import 'package:branta/src/helpers/aes_encryption.dart';
 import 'package:branta/src/v2/classes/payment_builder.dart';
 import 'package:branta/src/v2/clients/branta_client.dart';
 import 'package:branta/src/v2/config/branta_config.dart';
+import 'package:branta/src/v2/config/privacy_mode.dart';
 import 'package:branta/src/v2/models/destination.dart';
 import 'package:branta/src/v2/models/destination_type.dart';
 import 'package:branta/src/v2/models/payment.dart';
@@ -159,48 +160,48 @@ void main() {
 
   group('BrantaConfig', () {
     test('custom constructor stores baseUrl and apiKey', () {
-      const config = BrantaConfig(baseUrl: 'https://example.com', apiKey: 'key');
+      const config = BrantaConfig(baseUrl: 'https://example.com', apiKey: 'key', privacy: PrivacyMode.loose);
 
       expect(config.baseUrl, equals('https://example.com'));
       expect(config.apiKey, equals('key'));
     });
 
     test('custom constructor allows null apiKey', () {
-      const config = BrantaConfig(baseUrl: 'https://example.com');
+      const config = BrantaConfig(baseUrl: 'https://example.com', privacy: PrivacyMode.loose);
 
       expect(config.apiKey, isNull);
     });
 
     test('localhost() sets localhost baseUrl', () {
-      final config = BrantaConfig.localhost(apiKey: 'dev-key');
+      final config = BrantaConfig.localhost(apiKey: 'dev-key', privacy: PrivacyMode.loose);
 
       expect(config.baseUrl, equals('http://localhost:3000'));
       expect(config.apiKey, equals('dev-key'));
     });
 
     test('localhost() allows null apiKey', () {
-      final config = BrantaConfig.localhost();
+      final config = BrantaConfig.localhost(privacy: PrivacyMode.loose);
 
       expect(config.baseUrl, equals('http://localhost:3000'));
       expect(config.apiKey, isNull);
     });
 
     test('staging() sets staging baseUrl', () {
-      final config = BrantaConfig.staging(apiKey: 'staging-key');
+      final config = BrantaConfig.staging(apiKey: 'staging-key', privacy: PrivacyMode.loose);
 
       expect(config.baseUrl, equals('https://staging.guardrail.branta.pro'));
       expect(config.apiKey, equals('staging-key'));
     });
 
     test('production() sets guardrail.branta.pro baseUrl', () {
-      final config = BrantaConfig.production(apiKey: 'prod-key');
+      final config = BrantaConfig.production(apiKey: 'prod-key', privacy: PrivacyMode.loose);
 
       expect(config.baseUrl, equals('https://guardrail.branta.pro'));
       expect(config.apiKey, equals('prod-key'));
     });
 
     test('production() allows null apiKey', () {
-      final config = BrantaConfig.production();
+      final config = BrantaConfig.production(privacy: PrivacyMode.loose);
 
       expect(config.baseUrl, equals('https://guardrail.branta.pro'));
       expect(config.apiKey, isNull);
@@ -210,25 +211,26 @@ void main() {
       const config = BrantaConfig(
         baseUrl: 'https://example.com',
         hmacSecret: 'my-secret',
+        privacy: PrivacyMode.loose,
       );
 
       expect(config.hmacSecret, equals('my-secret'));
     });
 
     test('custom constructor allows null hmacSecret', () {
-      const config = BrantaConfig(baseUrl: 'https://example.com');
+      const config = BrantaConfig(baseUrl: 'https://example.com', privacy: PrivacyMode.loose);
 
       expect(config.hmacSecret, isNull);
     });
 
     test('localhost() stores hmacSecret', () {
-      final config = BrantaConfig.localhost(hmacSecret: 'dev-hmac');
+      final config = BrantaConfig.localhost(hmacSecret: 'dev-hmac', privacy: PrivacyMode.loose);
 
       expect(config.hmacSecret, equals('dev-hmac'));
     });
 
     test('production() stores hmacSecret', () {
-      final config = BrantaConfig.production(hmacSecret: 'prod-hmac');
+      final config = BrantaConfig.production(hmacSecret: 'prod-hmac', privacy: PrivacyMode.loose);
 
       expect(config.hmacSecret, equals('prod-hmac'));
     });
@@ -247,6 +249,7 @@ void main() {
       try {
         final config = BrantaConfig.fromEnvironment(
           baseUrl: 'https://example.com',
+          privacy: PrivacyMode.loose,
         );
 
         expect(config.baseUrl, equals('https://example.com'));
@@ -260,6 +263,36 @@ void main() {
         }
         if (envFile.existsSync()) envFile.deleteSync();
       }
+    });
+
+    test('custom constructor stores strict privacy', () {
+      const config = BrantaConfig(baseUrl: 'https://example.com', privacy: PrivacyMode.strict);
+
+      expect(config.privacy, equals(PrivacyMode.strict));
+    });
+
+    test('custom constructor stores loose privacy', () {
+      const config = BrantaConfig(baseUrl: 'https://example.com', privacy: PrivacyMode.loose);
+
+      expect(config.privacy, equals(PrivacyMode.loose));
+    });
+
+    test('localhost() stores privacy', () {
+      final config = BrantaConfig.localhost(privacy: PrivacyMode.strict);
+
+      expect(config.privacy, equals(PrivacyMode.strict));
+    });
+
+    test('production() stores privacy', () {
+      final config = BrantaConfig.production(privacy: PrivacyMode.strict);
+
+      expect(config.privacy, equals(PrivacyMode.strict));
+    });
+
+    test('staging() stores privacy', () {
+      final config = BrantaConfig.staging(privacy: PrivacyMode.strict);
+
+      expect(config.privacy, equals(PrivacyMode.strict));
     });
   });
 
@@ -277,7 +310,7 @@ void main() {
           captured = req;
           return http.Response('[]', 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       await client.getPaymentsAsync('addr+with+plus');
@@ -297,7 +330,7 @@ void main() {
 
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response(body, 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       expect(
@@ -322,7 +355,7 @@ void main() {
 
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response(body, 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       final result = await client.getPaymentsAsync('addr1');
@@ -333,7 +366,7 @@ void main() {
     test('getPaymentsAsync returns empty list on non-200', () async {
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response('', 404)),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       expect(await client.getPaymentsAsync('addr1'), isEmpty);
@@ -343,7 +376,7 @@ void main() {
     test('getPaymentsAsync returns empty list on empty body', () async {
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response('', 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       expect(await client.getPaymentsAsync('addr1'), isEmpty);
@@ -356,7 +389,7 @@ void main() {
 
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response(body, 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       final result = await client.getPaymentsAsync('addr1');
@@ -368,7 +401,7 @@ void main() {
     test('getPaymentsAsync returns empty list on network exception', () async {
       final client = BrantaClient(
         httpClient: MockClient((_) async => throw Exception('network error')),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       expect(await client.getPaymentsAsync('addr1'), isEmpty);
@@ -385,7 +418,7 @@ void main() {
           captured = req;
           return http.Response(responseBody, 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', privacy: PrivacyMode.loose),
       );
 
       final result = await client.addPaymentAsync(payment);
@@ -402,7 +435,7 @@ void main() {
 
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response('', 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       expect(
@@ -421,7 +454,7 @@ void main() {
 
       final client = BrantaClient(
         httpClient: MockClient((_) async => http.Response('Bad Request', 400)),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', privacy: PrivacyMode.loose),
       );
 
       expect(
@@ -448,6 +481,7 @@ void main() {
           baseUrl: baseUrl,
           apiKey: 'test-key',
           hmacSecret: 'my-hmac-secret',
+          privacy: PrivacyMode.loose,
         ),
       );
 
@@ -467,7 +501,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', privacy: PrivacyMode.loose),
       );
 
       await client.addPaymentAsync(payment);
@@ -486,7 +520,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'my-hmac-secret'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'my-hmac-secret', privacy: PrivacyMode.loose),
       );
 
       await client.addPaymentAsync(payment);
@@ -507,7 +541,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'my-hmac-secret'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'my-hmac-secret', privacy: PrivacyMode.loose),
       );
 
       await client.addPaymentAsync(payment);
@@ -529,7 +563,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: hmacSecret),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: hmacSecret, privacy: PrivacyMode.loose),
       );
 
       await client.addPaymentAsync(payment);
@@ -555,7 +589,7 @@ void main() {
           captured = req;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'zk-hmac-secret'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'zk-hmac-secret', privacy: PrivacyMode.loose),
       );
 
       await client.addZKPaymentAsync(payment);
@@ -582,7 +616,7 @@ void main() {
         httpClient: MockClient(
           (_) async => http.Response(json.encode([payment.toJson()]), 200),
         ),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       final result = await client.getZKPaymentsAsync('addr1', secret);
@@ -596,7 +630,7 @@ void main() {
       test('returns true on 200', () async {
         final client = BrantaClient(
           httpClient: MockClient((_) async => http.Response('', 200)),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', privacy: PrivacyMode.loose),
         );
         expect(await client.isApiKeyValidAsync(), isTrue);
         client.dispose();
@@ -605,7 +639,7 @@ void main() {
       test('returns false on 401', () async {
         final client = BrantaClient(
           httpClient: MockClient((_) async => http.Response('', 401)),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'bad-key'),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'bad-key', privacy: PrivacyMode.loose),
         );
         expect(await client.isApiKeyValidAsync(), isFalse);
         client.dispose();
@@ -618,7 +652,7 @@ void main() {
             captured = req;
             return http.Response('', 200);
           }),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key', privacy: PrivacyMode.loose),
         );
         await client.isApiKeyValidAsync();
         expect(captured.headers['Authorization'], equals('Bearer my-key'));
@@ -632,7 +666,7 @@ void main() {
             captured = req;
             return http.Response('', 200);
           }),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key', privacy: PrivacyMode.loose),
         );
         await client.isApiKeyValidAsync();
         expect(
@@ -645,7 +679,7 @@ void main() {
       test('returns false on network exception', () async {
         final client = BrantaClient(
           httpClient: MockClient((_) async => throw Exception('network error')),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
+          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key', privacy: PrivacyMode.loose),
         );
         expect(await client.isApiKeyValidAsync(), isFalse);
         client.dispose();
@@ -655,7 +689,7 @@ void main() {
     group('getPaymentsByQRCodeAsync', () {
       BrantaClient makeClient(MockClient mock) => BrantaClient(
         httpClient: mock,
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       // Returns a MockClient that captures requests and returns an empty list.
@@ -826,7 +860,7 @@ void main() {
         httpClient: MockClient(
           (_) async => http.Response(json.encode([payment.toJson()]), 200),
         ),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       final result = await client.getPaymentsAsync('bc1qabc');
@@ -847,7 +881,7 @@ void main() {
         httpClient: MockClient(
           (_) async => http.Response(json.encode([payment.toJson()]), 200),
         ),
-        config: BrantaConfig(baseUrl: baseUrl),
+        config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
       );
 
       final result = await client.getZKPaymentsAsync(address, secret);
@@ -865,7 +899,7 @@ void main() {
         httpClient: MockClient(
           (_) async => http.Response(json.encode(payment.toJson()), 200),
         ),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', privacy: PrivacyMode.loose),
       );
 
       final result = await client.addPaymentAsync(payment);
@@ -884,7 +918,7 @@ void main() {
           capturedEncryptedAddress = (body['destinations'] as List).first['value'] as String;
           return http.Response(json.encode(payment.toJson()), 200);
         }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
+        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', privacy: PrivacyMode.loose),
       );
 
       final (result, secret) = await client.addZKPaymentAsync(payment);
@@ -894,6 +928,128 @@ void main() {
         equals('$baseUrl/v2/zk-verify/${Uri.encodeComponent(capturedEncryptedAddress)}#secret=$secret'),
       );
       client.dispose();
+    });
+
+    group('privacy mode', () {
+      test('getPaymentsAsync throws BrantaPaymentException when privacy is strict', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => http.Response('[]', 200)),
+          config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.strict),
+        );
+
+        expect(
+          () => client.getPaymentsAsync('addr1'),
+          throwsA(isA<BrantaPaymentException>().having(
+            (e) => e.toString(),
+            'message',
+            contains('strict'),
+          )),
+        );
+        client.dispose();
+      });
+
+      test('getPaymentsAsync does not throw when privacy is loose', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => http.Response('[]', 200)),
+          config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.loose),
+        );
+
+        final result = await client.getPaymentsAsync('addr1');
+        expect(result, isEmpty);
+        client.dispose();
+      });
+
+      test('getPaymentsByQRCodeAsync strict: plain address returns []', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => http.Response('[]', 200)),
+          config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.strict),
+        );
+
+        final result = await client.getPaymentsByQRCodeAsync('bc1qabc123');
+        expect(result, isEmpty);
+        client.dispose();
+      });
+
+      test('getPaymentsByQRCodeAsync strict: bitcoin URI returns []', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => http.Response('[]', 200)),
+          config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.strict),
+        );
+
+        final result = await client.getPaymentsByQRCodeAsync('bitcoin:BC1QABC123');
+        expect(result, isEmpty);
+        client.dispose();
+      });
+
+      test('getPaymentsByQRCodeAsync strict: verify URL returns []', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => http.Response('[]', 200)),
+          config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.strict),
+        );
+
+        final result = await client.getPaymentsByQRCodeAsync('$baseUrl/v2/verify/bc1qabc123');
+        expect(result, isEmpty);
+        client.dispose();
+      });
+
+      test('getPaymentsByQRCodeAsync strict: zk-verify URL without secret returns []', () async {
+        final client = BrantaClient(
+          httpClient: MockClient((_) async => http.Response('[]', 200)),
+          config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.strict),
+        );
+
+        final result = await client.getPaymentsByQRCodeAsync('$baseUrl/v2/zk-verify/ZK_ID');
+        expect(result, isEmpty);
+        client.dispose();
+      });
+
+      test('getPaymentsByQRCodeAsync strict: ZK query params are allowed', () async {
+        const secret = 'test-secret';
+        const originalAddress = 'bc1qoriginaladdress';
+        final encrypted = await AesEncryption.encrypt(originalAddress, secret);
+        final payment = Payment(
+          destinations: [Destination(value: encrypted, zk: true)],
+          ttl: 3600,
+        );
+
+        final client = BrantaClient(
+          httpClient: MockClient(
+            (_) async => http.Response(json.encode([payment.toJson()]), 200),
+          ),
+          config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.strict),
+        );
+
+        final result = await client.getPaymentsByQRCodeAsync(
+          'http://example.com?branta_id=ZK_ID&branta_secret=$secret',
+        );
+
+        expect(result.length, equals(1));
+        client.dispose();
+      });
+
+      test('getPaymentsByQRCodeAsync strict: zk-verify URL with secret is allowed', () async {
+        const secret = 'test-secret';
+        const originalAddress = 'bc1qoriginaladdress';
+        final encrypted = await AesEncryption.encrypt(originalAddress, secret);
+        final payment = Payment(
+          destinations: [Destination(value: encrypted, zk: true)],
+          ttl: 3600,
+        );
+
+        final client = BrantaClient(
+          httpClient: MockClient(
+            (_) async => http.Response(json.encode([payment.toJson()]), 200),
+          ),
+          config: BrantaConfig(baseUrl: baseUrl, privacy: PrivacyMode.strict),
+        );
+
+        final result = await client.getPaymentsByQRCodeAsync(
+          '$baseUrl/v2/zk-verify/ZK_ID#secret=$secret',
+        );
+
+        expect(result.length, equals(1));
+        client.dispose();
+      });
     });
   });
 }
