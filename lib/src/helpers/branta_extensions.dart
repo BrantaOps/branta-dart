@@ -22,7 +22,7 @@ extension StringBrantaExtensions on String {
     final normalized = toLowerCase();
     final bytes = utf8.encode(normalized);
     final hash = sha256.convert(bytes);
-    return hash.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return hash.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join().toUpperCase();
   }
 }
 

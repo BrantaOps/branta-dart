@@ -338,9 +338,9 @@ void main() {
       expect(_bitcoinAddress.getHashZkType(), isNull);
     });
 
-    test('toNormalizedHash returns 64-char lowercase hex', () {
+    test('toNormalizedHash returns 64-char uppercase hex', () {
       final hash = _bolt11Invoice.toNormalizedHash();
-      expect(hash, matches(RegExp(r'^[0-9a-f]{64}$')));
+      expect(hash, matches(RegExp(r'^[0-9A-F]{64}$')));
     });
 
     test('toNormalizedHash is case-insensitive', () {
@@ -581,6 +581,34 @@ void main() {
 
       expect(payment.metadata, contains('"orderId"'));
       expect(payment.metadata, contains('"123"'));
+    });
+
+    test('addDestination without type leaves type null', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress)
+          .build();
+
+      expect(payment.destinations[0].type, isNull);
+    });
+
+    for (final (type, expected) in [
+      (DestinationType.bitcoinAddress, 'bitcoin_address'),
+      (DestinationType.bolt11, 'bolt11'),
+      (DestinationType.bolt12, 'bolt12'),
+      (DestinationType.lnUrl, 'ln_url'),
+      (DestinationType.tetherAddress, 'tether_address'),
+      (DestinationType.lnAddress, 'ln_address'),
+      (DestinationType.arkAddress, 'ark_address'),
+    ]) {
+      test('destinationType $type serializes to "$expected"', () {
+        final dest = Destination(value: 'addr', type: type);
+        expect(dest.toJson()['type'], equals(expected));
+      });
+    }
+
+    test('destinationType null is omitted from JSON', () {
+      final dest = Destination(value: 'addr');
+      expect(dest.toJson().containsKey('type'), isFalse);
     });
   });
 
@@ -932,6 +960,32 @@ void main() {
           equals('http://localhost:3000/v2/verify/$_bolt11Invoice'));
       expect(client.countGetCalls(_encryptedBolt11), equals(1));
       expect(client.countGetCalls(_bolt11Invoice), equals(1));
+    });
+
+    test('ZK payment with bitcoin and bolt11 destinations sets verifyUrl with both keys',
+        () async {
+      final payment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .addDestination(_encryptedBolt11, type: DestinationType.bolt11)
+          .setZk()
+          .build();
+      final zkIdBitcoin = payment.destinations[0].zkId!;
+      final zkIdBolt11 = payment.destinations[1].zkId!;
+
+      client.setupGetPayments(_encryptedBolt11, [payment]);
+
+      final result = await service.getPaymentsAsync(_bolt11Invoice,
+          destinationEncryptionKey: _secret);
+
+      expect(
+        result.verifyUrl,
+        equals(
+          'http://localhost:3000/v2/verify/${Uri.encodeComponent(_encryptedBolt11)}'
+          '#k-$zkIdBitcoin=$_secret&k-$zkIdBolt11=$_bolt11Hash',
+        ),
+      );
     });
 
     // Strict mode
