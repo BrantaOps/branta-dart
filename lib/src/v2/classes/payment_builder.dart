@@ -1,43 +1,54 @@
-import 'package:branta/src/v2/models/destination.dart';
-import 'package:branta/src/v2/models/destination_type.dart';
-import 'package:branta/src/v2/models/payment.dart';
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
+import '../../enums/destination_type.dart';
+import '../models/destination.dart';
+import '../models/payment.dart';
 
 class PaymentBuilder {
-  final Payment payment = Payment(destinations: [], ttl: 3600);
+  final Payment _payment = Payment(destinations: []);
 
-  PaymentBuilder addDestination(String address, [bool zk = false, DestinationType? type]) {
-    payment.destinations.add(Destination(value: address, zk: zk, type: type));
+  PaymentBuilder addDestination(String address, {DestinationType? type}) {
+    _payment.destinations.add(Destination(
+      value: address,
+      type: type,
+      isZk: false,
+    ));
+    return this;
+  }
 
+  PaymentBuilder setZk() {
+    if (_payment.destinations.isNotEmpty) {
+      final destination = _payment.destinations.last;
+      destination.isZk = true;
+      destination.zkId = const Uuid().v4();
+    }
     return this;
   }
 
   PaymentBuilder setDescription(String description) {
-    payment.description = description;
-
+    _payment.description = description;
     return this;
   }
 
   PaymentBuilder addMetadata(String key, String value) {
-    final Map<String, dynamic> metadataMap =
-        payment.metadata != null && payment.metadata!.isNotEmpty
-        ? jsonDecode(payment.metadata!) as Map<String, dynamic>
+    final existing = _payment.metadata;
+    final map = existing != null && existing.isNotEmpty
+        ? (jsonDecode(existing) as Map<String, dynamic>)
         : <String, dynamic>{};
-
-    metadataMap[key] = value;
-
-    payment.metadata = jsonEncode(metadataMap);
-
+    map[key] = value;
+    _payment.metadata = jsonEncode(map);
     return this;
   }
 
   PaymentBuilder setTtl(int ttl) {
-    payment.ttl = ttl;
-
+    _payment.ttl = ttl;
     return this;
   }
 
-  Payment build() {
-    return payment;
+  PaymentBuilder setPlatformLogoUrl(String platformLogoUrl) {
+    _payment.platformLogoUrl = platformLogoUrl;
+    return this;
   }
+
+  Payment build() => _payment;
 }

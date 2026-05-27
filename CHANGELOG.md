@@ -1,3 +1,18 @@
+## 3.1.0
+
+- Complete rewrite to achieve feature parity with `branta-dotnet` and `branta-js` v3.1.0
+- Replaced `BrantaConfig` with `BrantaClientOptions` (adds `privacy`, `hmacSecret`, `defaultApiKey`)
+- Added `PrivacyMode` enum (`strict` / `loose`); strict is the default
+- Split HTTP layer into `BrantaClient` (raw HTTP) and `BrantaService` (orchestration)
+- `getPaymentsAsync` and `getPaymentsByQrCodeAsync` now return `PaymentsResult` (payments + `verifyUrl`)
+- `addPaymentAsync` now returns `AddPaymentResult` (payment + secret + `verifyUrl`)
+- Added ZK support: hash-based deterministic encryption for bolt11 and ark addresses; secret-based for bitcoin addresses
+- `QRParser` rewritten to support combined QR codes (`bitcoin:` + `lightning=` / `ark=` params), `branta_id`/`branta_secret`, and plain-text address detection
+- `PaymentBuilder.setZk()` marks the last destination as ZK and assigns a UUID `zkId`
+- `verifyUrl` includes `#k-{zkId}={key}` fragments for each decrypted ZK destination
+- Removed `json_serializable` / `build_runner` in favour of hand-written `fromJson`/`toJson`
+- Added `Platform` model and `parentPlatform` / `btcPayServerPluginVersion` fields on `Payment`
+
 ## 1.0.2
 
 - [#18](https://github.com/BrantaOps/branta-dart/issues/18) Add platform_logo_light_url to payment

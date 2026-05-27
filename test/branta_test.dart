@@ -1,899 +1,1273 @@
-// Run `make build` before running tests to generate *.g.dart files.
-import 'dart:convert';
-import 'dart:io';
-import 'package:branta/src/exceptions/branta_payment_exception.dart';
+import 'package:branta/branta.dart';
 import 'package:branta/src/helpers/aes_encryption.dart';
-import 'package:branta/src/v2/classes/payment_builder.dart';
-import 'package:branta/src/v2/clients/branta_client.dart';
-import 'package:branta/src/v2/config/branta_config.dart';
-import 'package:branta/src/v2/models/destination.dart';
-import 'package:branta/src/v2/models/destination_type.dart';
-import 'package:branta/src/v2/models/payment.dart';
-import 'package:crypto/crypto.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
+// ---------------------------------------------------------------------------
+// Test stubs
+// ---------------------------------------------------------------------------
+
+class _ClientCall {
+  final String address;
+  final BrantaClientOptions? options;
+  _ClientCall(this.address, this.options);
+}
+
+class MockBrantaClient implements IBrantaClient {
+  final Map<String, List<Payment>> _getPaymentsMap = {};
+  Payment? _postPaymentResponse;
+  bool _isApiKeyValid = true;
+
+  final List<_ClientCall> getPaymentsCalls = [];
+  int postPaymentCallCount = 0;
+  BrantaClientOptions? lastIsApiKeyValidOptions;
+
+  void setupGetPayments(String address, List<Payment> payments) {
+    _getPaymentsMap[address] = payments;
+  }
+
+  void setupPostPayment(Payment payment) {
+    _postPaymentResponse = payment;
+  }
+
+  void setIsApiKeyValid(bool value) => _isApiKeyValid = value;
+
+  @override
+  Future<List<Payment>> getPaymentsAsync(String destinationValue,
+      {BrantaClientOptions? options}) async {
+    getPaymentsCalls.add(_ClientCall(destinationValue, options));
+    return _getPaymentsMap[destinationValue] ?? [];
+  }
+
+  @override
+  Future<Payment?> postPaymentAsync(Payment payment,
+      {BrantaClientOptions? options}) async {
+    postPaymentCallCount++;
+    return _postPaymentResponse;
+  }
+
+  @override
+  Future<bool> isApiKeyValidAsync({BrantaClientOptions? options}) async {
+    lastIsApiKeyValidOptions = options;
+    return _isApiKeyValid;
+  }
+
+  int countGetCalls(String address) =>
+      getPaymentsCalls.where((c) => c.address == address).length;
+}
+
+class _EncryptCall {
+  final String value;
+  final String secret;
+  final bool deterministicNonce;
+  _EncryptCall(this.value, this.secret, this.deterministicNonce);
+}
+
+class _DecryptCall {
+  final String encrypted;
+  final String secret;
+  _DecryptCall(this.encrypted, this.secret);
+}
+
+class _EncryptSetup {
+  final String value;
+  final String secret;
+  final bool deterministicNonce;
+  final String result;
+  _EncryptSetup(this.value, this.secret, this.deterministicNonce, this.result);
+}
+
+class _DecryptSetup {
+  final String encrypted;
+  final String secret;
+  final dynamic result; // String or Exception
+  _DecryptSetup(this.encrypted, this.secret, this.result);
+}
+
+class MockAesEncryption implements IAesEncryption {
+  final List<_EncryptSetup> _encryptSetups = [];
+  final List<_DecryptSetup> _decryptSetups = [];
+  final List<_EncryptCall> encryptCalls = [];
+  final List<_DecryptCall> decryptCalls = [];
+
+  void setupEncrypt(String value, String secret, String result,
+      {bool deterministicNonce = false}) {
+    _encryptSetups
+        .add(_EncryptSetup(value, secret, deterministicNonce, result));
+  }
+
+  void setupDecryptResult(String encrypted, String secret, String result) {
+    _decryptSetups.add(_DecryptSetup(encrypted, secret, result));
+  }
+
+  void setupDecryptThrows(String encrypted, String secret, Exception error) {
+    _decryptSetups.add(_DecryptSetup(encrypted, secret, error));
+  }
+
+  @override
+  Future<String> encrypt(String value, String secret,
+      {bool deterministicNonce = false}) async {
+    encryptCalls.add(_EncryptCall(value, secret, deterministicNonce));
+    for (final s in _encryptSetups) {
+      if (s.value == value &&
+          s.secret == secret &&
+          s.deterministicNonce == deterministicNonce) {
+        return s.result;
+      }
+    }
+    throw StateError(
+        'MockAesEncryption: no encrypt setup for ($value, $secret, deterministicNonce=$deterministicNonce)');
+  }
+
+  @override
+  Future<String> decrypt(String encryptedValue, String secret) async {
+    decryptCalls.add(_DecryptCall(encryptedValue, secret));
+    for (final s in _decryptSetups) {
+      if (s.encrypted == encryptedValue && s.secret == secret) {
+        if (s.result is Exception) throw s.result as Exception;
+        return s.result as String;
+      }
+    }
+    throw StateError(
+        'MockAesEncryption: no decrypt setup for ($encryptedValue, $secret)');
+  }
+
+  int countEncryptCalls(String value, String secret,
+          {bool deterministicNonce = false}) =>
+      encryptCalls
+          .where((c) =>
+              c.value == value &&
+              c.secret == secret &&
+              c.deterministicNonce == deterministicNonce)
+          .length;
+
+  int countDecryptCalls(String encrypted, String secret) =>
+      decryptCalls
+          .where((c) => c.encrypted == encrypted && c.secret == secret)
+          .length;
+}
+
+class MockSecretGenerator implements ISecretGenerator {
+  final String _secret;
+  MockSecretGenerator(this._secret);
+
+  @override
+  String generate() => _secret;
+
+  @override
+  bool get deterministicNonce => false;
+}
+
+// ---------------------------------------------------------------------------
+// Test constants
+// ---------------------------------------------------------------------------
+
+const String _bitcoinAddress = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
+const String _encryptedBitcoinAddress = 'encrypted-bitcoin-address';
+const String _secret = 'test-secret';
+
+const String _bolt11Invoice = 'lnbc100n1ptest';
+const String _encryptedBolt11 = 'encrypted-bolt11-value';
+const String _decryptedBolt11 = 'lnbc100n1pdecrypted';
+
+const String _arkAddress = 'ark100testaddress';
+const String _encryptedArkAddress = 'encrypted-ark-address';
+
+final String _bolt11Hash = _bolt11Invoice.toNormalizedHash();
+final String _arkHash = _arkAddress.toNormalizedHash();
+
+Payment get _plainBitcoinPayment => PaymentBuilder()
+    .addDestination(_bitcoinAddress, type: DestinationType.bitcoinAddress)
+    .build();
+
+Payment get _zkBitcoinPayment => PaymentBuilder()
+    .addDestination(_encryptedBitcoinAddress,
+        type: DestinationType.bitcoinAddress)
+    .setZk()
+    .build();
+
+Payment get _zkBolt11Payment => PaymentBuilder()
+    .addDestination(_encryptedBolt11, type: DestinationType.bolt11)
+    .setZk()
+    .build();
+
+Payment get _plainBolt11Payment => PaymentBuilder()
+    .addDestination(_bolt11Invoice, type: DestinationType.bolt11)
+    .build();
+
+Payment get _zkArkPayment => PaymentBuilder()
+    .addDestination(_encryptedArkAddress, type: DestinationType.arkAddress)
+    .setZk()
+    .build();
+
+// ---------------------------------------------------------------------------
+// Service factory helpers
+// ---------------------------------------------------------------------------
+
+const _looseOptions = BrantaClientOptions(
+  baseUrl: BrantaServerBaseUrl.localhost,
+  defaultApiKey: 'test-api-key',
+  privacy: PrivacyMode.loose,
+);
+
+const _strictOptions = BrantaClientOptions(
+  baseUrl: BrantaServerBaseUrl.localhost,
+  defaultApiKey: 'test-api-key',
+  privacy: PrivacyMode.strict,
+);
+
+BrantaService _makeService(MockBrantaClient client, MockAesEncryption aes,
+    {bool strict = false}) {
+  return BrantaService(
+    client: client,
+    aesEncryption: aes,
+    defaultOptions: strict ? _strictOptions : _looseOptions,
+    secretGenerator: MockSecretGenerator(_secret),
+  );
+}
+
+void _setupDefaultMocks(MockAesEncryption aes) {
+  aes.setupDecryptResult(_encryptedBitcoinAddress, _secret, _bitcoinAddress);
+  aes.setupEncrypt(_bolt11Invoice, _bolt11Hash, _encryptedBolt11,
+      deterministicNonce: true);
+  aes.setupDecryptResult(_encryptedBolt11, _bolt11Hash, _decryptedBolt11);
+  aes.setupEncrypt(_bitcoinAddress, _secret, _encryptedBitcoinAddress);
+  aes.setupEncrypt(_arkAddress, _arkHash, _encryptedArkAddress,
+      deterministicNonce: true);
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 void main() {
+  // -------------------------------------------------------------------------
+  // AesEncryption
+  // -------------------------------------------------------------------------
   group('AesEncryption', () {
-    test('encrypt and decrypt roundtrip', () async {
-      const value = 'test-address-123';
-      const secret = 'my-secret-key';
-
-      final encrypted = await AesEncryption.encrypt(value, secret);
-      final decrypted = await AesEncryption.decrypt(encrypted, secret);
-
-      expect(decrypted, equals(value));
+    test('encrypt and decrypt round-trips', () async {
+      const address = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
+      const secret = '12345';
+      final encrypted = await AesEncryption.encrypt(address, secret);
+      expect(await AesEncryption.decrypt(encrypted, secret), equals(address));
     });
 
-    test('decrypt with wrong secret throws', () async {
-      final encrypted = await AesEncryption.encrypt('value', 'correct-secret');
-
-      expect(
-        () => AesEncryption.decrypt(encrypted, 'wrong-secret'),
-        throwsException,
-      );
+    test('deterministic nonce produces same ciphertext each time', () async {
+      const address = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
+      const secret = '12345';
+      final first =
+          await AesEncryption.encrypt(address, secret, deterministicNonce: true);
+      final second =
+          await AesEncryption.encrypt(address, secret, deterministicNonce: true);
+      expect(first, equals(second));
     });
 
-    test('decrypt with too-short data throws', () {
-      expect(
-        () => AesEncryption.decrypt(base64.encode([1, 2, 3]), 'secret'),
-        throwsException,
-      );
-    });
-
-    test('produces different ciphertext each call due to random nonce', () async {
-      const value = 'same-value';
-      const secret = 'same-secret';
-
-      final enc1 = await AesEncryption.encrypt(value, secret);
-      final enc2 = await AesEncryption.encrypt(value, secret);
-
-      expect(enc1, isNot(equals(enc2)));
+    test('random nonce produces different ciphertext each time', () async {
+      const address = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
+      const secret = '12345';
+      final first = await AesEncryption.encrypt(address, secret);
+      final second = await AesEncryption.encrypt(address, secret);
+      expect(first, isNot(equals(second)));
     });
   });
 
-  group('PaymentBuilder', () {
-    test('defaults: empty destinations and ttl 3600', () {
-      final payment = PaymentBuilder().build();
-
-      expect(payment.destinations, isEmpty);
-      expect(payment.ttl, equals(3600));
+  // -------------------------------------------------------------------------
+  // BrantaServerBaseUrl
+  // -------------------------------------------------------------------------
+  group('BrantaServerBaseUrl', () {
+    test('localhost returns correct URL', () {
+      expect(BrantaServerBaseUrl.localhost.url, equals('http://localhost:3000'));
     });
 
-    test('addDestination adds destination with zk=false by default', () {
-      final payment = PaymentBuilder().addDestination('addr1').build();
+    test('production returns correct URL', () {
+      expect(BrantaServerBaseUrl.production.url,
+          equals('https://guardrail.branta.pro'));
+    });
+
+    test('staging returns correct URL', () {
+      expect(BrantaServerBaseUrl.staging.url,
+          equals('https://staging.guardrail.branta.pro'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // BrantaExtensions
+  // -------------------------------------------------------------------------
+  group('BrantaExtensions', () {
+    test('isBolt11 returns true for lnbc prefix', () {
+      expect('lnbc100n1ptest'.isBolt11(), isTrue);
+    });
+
+    test('isBolt11 returns true for lntb prefix', () {
+      expect('lntb100n1ptest'.isBolt11(), isTrue);
+    });
+
+    test('isBolt11 returns true for lnbcrt prefix', () {
+      expect('lnbcrt100n1ptest'.isBolt11(), isTrue);
+    });
+
+    test('isBolt11 is case-insensitive', () {
+      expect('LNBC100N1PTEST'.isBolt11(), isTrue);
+    });
+
+    test('isBolt11 returns false for non-bolt11 values', () {
+      expect('bc1qabc'.isBolt11(), isFalse);
+      expect(_arkAddress.isBolt11(), isFalse);
+    });
+
+    test('isArk returns true for ark1 prefix', () {
+      expect('ark1qqjqtest'.isArk(), isTrue);
+    });
+
+    test('isArk is case-insensitive', () {
+      expect('ARK1QQJQTEST'.isArk(), isTrue);
+    });
+
+    test('isArk returns false for non-ark values', () {
+      expect('bc1qabc'.isArk(), isFalse);
+    });
+
+    test('getHashZkType returns bolt11 for bolt11 invoice', () {
+      expect(_bolt11Invoice.getHashZkType(), equals(DestinationType.bolt11));
+    });
+
+    test('getHashZkType returns arkAddress for ark address', () {
+      expect(_arkAddress.getHashZkType(), equals(DestinationType.arkAddress));
+    });
+
+    test('getHashZkType returns null for bitcoin address', () {
+      expect(_bitcoinAddress.getHashZkType(), isNull);
+    });
+
+    test('toNormalizedHash returns 64-char lowercase hex', () {
+      final hash = _bolt11Invoice.toNormalizedHash();
+      expect(hash, matches(RegExp(r'^[0-9a-f]{64}$')));
+    });
+
+    test('toNormalizedHash is case-insensitive', () {
+      expect(_bolt11Invoice.toNormalizedHash(),
+          equals(_bolt11Invoice.toUpperCase().toNormalizedHash()));
+    });
+
+    test('toUrlFragment formats pairs with k- prefix', () {
+      final fragment = {'zkId1': 'secret1'}.toUrlFragment();
+      expect(fragment, equals('#k-zkId1=secret1'));
+    });
+
+    test('toUrlFragment joins multiple pairs with &', () {
+      // LinkedHashMap preserves insertion order
+      final map = <String, String>{};
+      map['a'] = '1';
+      map['b'] = '2';
+      expect(map.toUrlFragment(), equals('#k-a=1&k-b=2'));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // QRParser
+  // -------------------------------------------------------------------------
+  group('QRParser', () {
+    test('bitcoin URI sets bitcoinAddress type and destination', () {
+      final result =
+          QRParser('bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa');
+
+      expect(result.destination,
+          equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'));
+      expect(result.destinationType, equals(DestinationType.bitcoinAddress));
+      expect(result.onChainEncryptionText, isNull);
+      expect(result.onChainEncryptionSecret, isNull);
+    });
+
+    test('bitcoin URI with branta params sets ZK properties', () {
+      final result = QRParser(
+          'bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?branta_id=abc%2Bdef%3D&branta_secret=1234');
+
+      expect(result.destination,
+          equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'));
+      expect(result.destinationType, equals(DestinationType.bitcoinAddress));
+      expect(result.onChainEncryptionText, equals('abc+def='));
+      expect(result.onChainEncryptionSecret, equals('1234'));
+    });
+
+    test('bitcoin URI decodes URI-encoded lightning param', () {
+      final result = QRParser(
+          'bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?lightning=lnbc100n1ptest%3Dpadded');
+
+      expect(result.destinations.length, equals(2));
+      expect(result.destinations[1].value, equals('lnbc100n1ptest=padded'));
+      expect(result.destinations[1].type, equals(DestinationType.bolt11));
+    });
+
+    test('plain bitcoin address sets bitcoinAddress type', () {
+      final result = QRParser('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa');
+
+      expect(result.destination,
+          equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'));
+      expect(result.destinationType, equals(DestinationType.bitcoinAddress));
+    });
+
+    test('lightning bolt11 URI sets bolt11 type', () {
+      final result = QRParser('lightning:lnbc100n1ptest');
+
+      expect(result.destination, equals('lnbc100n1ptest'));
+      expect(result.destinationType, equals(DestinationType.bolt11));
+    });
+
+    test('plain bolt11 sets bolt11 type', () {
+      final result = QRParser('lnbc100n1ptest');
+
+      expect(result.destination, equals('lnbc100n1ptest'));
+      expect(result.destinationType, equals(DestinationType.bolt11));
+    });
+
+    test('lightning bolt12 URI sets bolt12 type', () {
+      final result = QRParser('lightning:lno1qcptest');
+
+      expect(result.destination, equals('lno1qcptest'));
+      expect(result.destinationType, equals(DestinationType.bolt12));
+    });
+
+    test('plain bolt12 sets bolt12 type', () {
+      final result = QRParser('lno1qcptest');
+
+      expect(result.destination, equals('lno1qcptest'));
+      expect(result.destinationType, equals(DestinationType.bolt12));
+    });
+
+    test('lightning LNURL URI sets lnUrl type', () {
+      final result = QRParser('lightning:LNURL1DP68GURN8GHJ');
+
+      expect(result.destination, equals('LNURL1DP68GURN8GHJ'));
+      expect(result.destinationType, equals(DestinationType.lnUrl));
+    });
+
+    test('plain LNURL sets lnUrl type', () {
+      final result = QRParser('LNURL1DP68GURN8GHJ');
+
+      expect(result.destination, equals('LNURL1DP68GURN8GHJ'));
+      expect(result.destinationType, equals(DestinationType.lnUrl));
+    });
+
+    test('Ethereum address sets tetherAddress type', () {
+      final result =
+          QRParser('0x742d35Cc6634C0532925a3b844Bc454e4438f44e');
+
+      expect(result.destination,
+          equals('0x742d35Cc6634C0532925a3b844Bc454e4438f44e'));
+      expect(result.destinationType, equals(DestinationType.tetherAddress));
+    });
+
+    test('Tron address sets tetherAddress type', () {
+      final result = QRParser('TJmUNSGV6b1CCVXN1KkABY49nUJGWDH3Hd');
+
+      expect(result.destination,
+          equals('TJmUNSGV6b1CCVXN1KkABY49nUJGWDH3Hd'));
+      expect(result.destinationType, equals(DestinationType.tetherAddress));
+    });
+
+    test('ark address sets arkAddress type', () {
+      final result = QRParser('ark1qqjqtest');
+
+      expect(result.destination, equals('ark1qqjqtest'));
+      expect(result.destinationType, equals(DestinationType.arkAddress));
+    });
+
+    test('unrecognized text sets null type', () {
+      final result = QRParser('not-any-known-format');
+
+      expect(result.destination, equals('not-any-known-format'));
+      expect(result.destinationType, isNull);
+    });
+
+    test('leading and trailing whitespace is trimmed', () {
+      final result = QRParser('  lnbc100n1ptest  ');
+
+      expect(result.destination, equals('lnbc100n1ptest'));
+      expect(result.destinationType, equals(DestinationType.bolt11));
+    });
+
+    test('combined QR (bitcoin + lightning) parses both destinations', () {
+      final result = QRParser(
+          'bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?&lightning=lnbc100n1ptest');
+
+      expect(result.destinations.length, equals(2));
+      expect(result.destination,
+          equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'));
+      expect(result.destinationType, equals(DestinationType.bitcoinAddress));
+      expect(result.destinations[1].value, equals('lnbc100n1ptest'));
+      expect(result.destinations[1].type, equals(DestinationType.bolt11));
+      expect(result.isOnChainZk(), isFalse);
+    });
+
+    test('combined QR with multiple alt destinations parses all', () {
+      final result = QRParser(
+          'bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?&lightning=lnbc100n1ptest&ark=ark100testaddress');
+
+      expect(result.destinations.length, equals(3));
+      expect(result.destination,
+          equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'));
+      expect(result.destinationType, equals(DestinationType.bitcoinAddress));
+      expect(result.destinations[1].value, equals('lnbc100n1ptest'));
+      expect(result.destinations[1].type, equals(DestinationType.bolt11));
+      expect(result.destinations[2].value, equals('ark100testaddress'));
+      expect(result.destinations[2].type, equals(DestinationType.arkAddress));
+      expect(result.isOnChainZk(), isFalse);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // PaymentBuilder
+  // -------------------------------------------------------------------------
+  group('PaymentBuilder', () {
+    test('addDestination adds destination with correct value and type', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .build();
 
       expect(payment.destinations.length, equals(1));
-      expect(payment.destinations[0].value, equals('addr1'));
-      expect(payment.destinations[0].zk, isFalse);
+      expect(payment.destinations[0].value, equals(_bitcoinAddress));
+      expect(payment.destinations[0].type,
+          equals(DestinationType.bitcoinAddress));
+      expect(payment.destinations[0].isZk, isFalse);
     });
 
-    test('addDestination with zk=true', () {
-      final payment = PaymentBuilder().addDestination('addr1', true).build();
+    test('setZk marks last destination as ZK and assigns zkId', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
 
-      expect(payment.destinations[0].zk, isTrue);
+      expect(payment.destinations[0].isZk, isTrue);
+      expect(payment.destinations[0].zkId, isNotNull);
+      expect(payment.destinations[0].zkId!.length, greaterThan(0));
+    });
+
+    test('setZk only applies to the last destination', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .addDestination(_bolt11Invoice, type: DestinationType.bolt11)
+          .setZk()
+          .build();
+
+      expect(payment.destinations[0].isZk, isFalse);
+      expect(payment.destinations[1].isZk, isTrue);
     });
 
     test('setDescription sets description', () {
-      final payment = PaymentBuilder().setDescription('my payment').build();
-
-      expect(payment.description, equals('my payment'));
-    });
-
-    test('addMetadata encodes key-value as JSON string', () {
-      final payment = PaymentBuilder().addMetadata('k1', 'v1').build();
-
-      final meta = json.decode(payment.metadata!) as Map<String, dynamic>;
-      expect(meta['k1'], equals('v1'));
-    });
-
-    test('addMetadata merges multiple calls into one JSON object', () {
       final payment = PaymentBuilder()
-          .addMetadata('k1', 'v1')
-          .addMetadata('k2', 'v2')
+          .addDestination(_bitcoinAddress)
+          .setDescription('test desc')
           .build();
 
-      final meta = json.decode(payment.metadata!) as Map<String, dynamic>;
-      expect(meta['k1'], equals('v1'));
-      expect(meta['k2'], equals('v2'));
+      expect(payment.description, equals('test desc'));
     });
 
-    test('setTtl overrides default', () {
-      final payment = PaymentBuilder().setTtl(7200).build();
-
-      expect(payment.ttl, equals(7200));
-    });
-
-    test('fluent methods return the same builder instance', () {
-      final builder = PaymentBuilder();
-
-      expect(builder.addDestination('a'), same(builder));
-      expect(builder.setDescription('d'), same(builder));
-      expect(builder.addMetadata('k', 'v'), same(builder));
-      expect(builder.setTtl(100), same(builder));
-    });
-
-    test('addDestination with type sets type field', () {
+    test('setTtl sets ttl', () {
       final payment = PaymentBuilder()
-          .addDestination('addr1', false, DestinationType.bitcoinAddress)
+          .addDestination(_bitcoinAddress)
+          .setTtl(3600)
           .build();
 
-      expect(payment.destinations[0].type, equals(DestinationType.bitcoinAddress));
+      expect(payment.ttl, equals(3600));
     });
 
-    test('addDestination without type leaves type null', () {
-      final payment = PaymentBuilder().addDestination('addr1').build();
+    test('addMetadata adds key-value pair to metadata JSON', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress)
+          .addMetadata('orderId', '123')
+          .build();
 
-      expect(payment.destinations[0].type, isNull);
-    });
-
-    test('addDestination type serializes to correct JSON value', () {
-      final destination = Destination(value: 'addr', type: DestinationType.bolt11);
-      final json = destination.toJson();
-
-      expect(json['type'], equals('bolt11'));
-    });
-
-    test('addDestination null type omits type from JSON', () {
-      final destination = Destination(value: 'addr');
-      final json = destination.toJson();
-
-      expect(json['type'], isNull);
-    });
-
-    test('addDestination type ln_address serializes to correct JSON value', () {
-      final destination = Destination(value: 'addr', type: DestinationType.lnAddress);
-      final json = destination.toJson();
-
-      expect(json['type'], equals('ln_address'));
-    });
-
-    test('addDestination type ark_address serializes to correct JSON value', () {
-      final destination = Destination(value: 'addr', type: DestinationType.arkAddress);
-      final json = destination.toJson();
-
-      expect(json['type'], equals('ark_address'));
+      expect(payment.metadata, contains('"orderId"'));
+      expect(payment.metadata, contains('"123"'));
     });
   });
 
-  group('BrantaConfig', () {
-    test('custom constructor stores baseUrl and apiKey', () {
-      const config = BrantaConfig(baseUrl: 'https://example.com', apiKey: 'key');
+  // -------------------------------------------------------------------------
+  // BrantaService — GetPaymentsByQrCodeAsync
+  // -------------------------------------------------------------------------
+  group('BrantaService.getPaymentsByQrCodeAsync', () {
+    late MockBrantaClient client;
+    late MockAesEncryption aes;
+    late BrantaService service;
+    late BrantaService strictService;
 
-      expect(config.baseUrl, equals('https://example.com'));
-      expect(config.apiKey, equals('key'));
+    setUp(() {
+      client = MockBrantaClient();
+      aes = MockAesEncryption();
+      _setupDefaultMocks(aes);
+      service = _makeService(client, aes);
+      strictService = _makeService(client, aes, strict: true);
     });
 
-    test('custom constructor allows null apiKey', () {
-      const config = BrantaConfig(baseUrl: 'https://example.com');
+    test('ZK bitcoin URI uses branta_id as lookup value and decrypts', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
 
-      expect(config.apiKey, isNull);
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(client.countGetCalls(_encryptedBitcoinAddress), equals(1));
+      expect(result.payments[0].destinations[0].value,
+          equals(_bitcoinAddress));
     });
 
-    test('localhost() sets localhost baseUrl', () {
-      final config = BrantaConfig.localhost(apiKey: 'dev-key');
+    test('plain bitcoin URI uses address as lookup', () async {
+      client.setupGetPayments(_bitcoinAddress, [_plainBitcoinPayment]);
 
-      expect(config.baseUrl, equals('http://localhost:3000'));
-      expect(config.apiKey, equals('dev-key'));
+      final result =
+          await service.getPaymentsByQrCodeAsync('bitcoin:$_bitcoinAddress');
+
+      expect(client.countGetCalls(_bitcoinAddress), equals(1));
+      expect(result.payments.length, equals(1));
     });
 
-    test('localhost() allows null apiKey', () {
-      final config = BrantaConfig.localhost();
+    test('lightning bolt11 URI uses encrypted invoice as lookup', () async {
+      client.setupGetPayments(_encryptedBolt11, [_plainBolt11Payment]);
 
-      expect(config.baseUrl, equals('http://localhost:3000'));
-      expect(config.apiKey, isNull);
+      await service.getPaymentsByQrCodeAsync('lightning:$_bolt11Invoice');
+
+      expect(client.countGetCalls(_encryptedBolt11), equals(1));
     });
 
-    test('staging() sets staging baseUrl', () {
-      final config = BrantaConfig.staging(apiKey: 'staging-key');
+    test('uppercase lightning bolt11 URI uses encrypted invoice as lookup',
+        () async {
+      client.setupGetPayments(_encryptedBolt11, [_plainBolt11Payment]);
 
-      expect(config.baseUrl, equals('https://staging.guardrail.branta.pro'));
-      expect(config.apiKey, equals('staging-key'));
+      await service
+          .getPaymentsByQrCodeAsync('lightning:${_bolt11Invoice.toUpperCase()}');
+
+      expect(client.countGetCalls(_encryptedBolt11), equals(1));
     });
 
-    test('production() sets guardrail.branta.pro baseUrl', () {
-      final config = BrantaConfig.production(apiKey: 'prod-key');
+    test(
+        'lightning bolt11 URI leaves unrelated ZK bitcoin destination encrypted',
+        () async {
+      final payment = PaymentBuilder()
+          .addDestination(_encryptedBolt11, type: DestinationType.bolt11)
+          .setZk()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
 
-      expect(config.baseUrl, equals('https://guardrail.branta.pro'));
-      expect(config.apiKey, equals('prod-key'));
+      client.setupGetPayments(_encryptedBolt11, [payment]);
+
+      final result =
+          await service.getPaymentsByQrCodeAsync('lightning:$_bolt11Invoice');
+
+      expect(result.payments.length, equals(1));
+      expect(result.payments[0].destinations[0].value,
+          equals(_decryptedBolt11));
+      expect(result.payments[0].destinations[0].isEncrypted, isFalse);
+      expect(result.payments[0].destinations[1].value,
+          equals(_encryptedBitcoinAddress));
+      expect(result.payments[0].destinations[1].isEncrypted, isTrue);
     });
 
-    test('production() allows null apiKey', () {
-      final config = BrantaConfig.production();
+    test('combined ZK QR decrypts bitcoin, bolt11, and ark destinations',
+        () async {
+      final payment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .addDestination(_encryptedBolt11, type: DestinationType.bolt11)
+          .setZk()
+          .addDestination(_encryptedArkAddress,
+              type: DestinationType.arkAddress)
+          .setZk()
+          .build();
 
-      expect(config.baseUrl, equals('https://guardrail.branta.pro'));
-      expect(config.apiKey, isNull);
-    });
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+      aes.setupDecryptResult(_encryptedArkAddress, _arkHash, 'decrypted-ark');
 
-    test('custom constructor stores hmacSecret', () {
-      const config = BrantaConfig(
-        baseUrl: 'https://example.com',
-        hmacSecret: 'my-secret',
+      final zkId = payment.destinations[0].zkId!;
+      final bolt11ZkId = payment.destinations[1].zkId!;
+      final arkZkId = payment.destinations[2].zkId!;
+
+      final qrText =
+          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret&lightning=$_bolt11Invoice&ark=$_arkAddress';
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments.length, equals(1));
+      expect(result.payments[0].destinations[0].value,
+          equals(_bitcoinAddress));
+      expect(result.payments[0].destinations[1].value,
+          equals(_decryptedBolt11));
+      expect(
+        result.verifyUrl,
+        equals(
+          'http://localhost:3000/v2/verify/${Uri.encodeComponent(_encryptedBitcoinAddress)}'
+          '#k-$zkId=$_secret&k-$bolt11ZkId=$_bolt11Hash&k-$arkZkId=$_arkHash',
+        ),
       );
-
-      expect(config.hmacSecret, equals('my-secret'));
+      expect(aes.countDecryptCalls(_encryptedBitcoinAddress, _secret),
+          equals(1));
+      expect(aes.countDecryptCalls(_encryptedBolt11, _bolt11Hash), equals(1));
     });
 
-    test('custom constructor allows null hmacSecret', () {
-      const config = BrantaConfig(baseUrl: 'https://example.com');
+    // Strict mode
+    test('strict: plain bitcoin URI returns empty PaymentsResult', () async {
+      final result =
+          await strictService.getPaymentsByQrCodeAsync('bitcoin:$_bitcoinAddress');
 
-      expect(config.hmacSecret, isNull);
+      expect(result.payments, isEmpty);
+      expect(result.verifyUrl,
+          equals('http://localhost:3000/v2/verify/$_bitcoinAddress'));
+      expect(client.getPaymentsCalls, isEmpty);
     });
 
-    test('localhost() stores hmacSecret', () {
-      final config = BrantaConfig.localhost(hmacSecret: 'dev-hmac');
+    test('strict: ZK bitcoin URI succeeds', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
 
-      expect(config.hmacSecret, equals('dev-hmac'));
+      final result = await strictService.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments.length, equals(1));
+      expect(client.countGetCalls(_encryptedBitcoinAddress), equals(1));
     });
 
-    test('production() stores hmacSecret', () {
-      final config = BrantaConfig.production(hmacSecret: 'prod-hmac');
+    test('strict: lightning bolt11 URI succeeds', () async {
+      client.setupGetPayments(_encryptedBolt11, [_plainBolt11Payment]);
 
-      expect(config.hmacSecret, equals('prod-hmac'));
-    });
+      await strictService.getPaymentsByQrCodeAsync('lightning:$_bolt11Invoice');
 
-    test('fromEnvironment reads BRANTA_API_KEY and BRANTA_HMAC_SECRET from .env', () {
-      final envFile = File('.env.hmac_test');
-      envFile.writeAsStringSync(
-        'BRANTA_API_KEY=env-api-key\nBRANTA_HMAC_SECRET=env-hmac-secret\n',
-      );
-
-      final realEnv = File('.env');
-      final hadRealEnv = realEnv.existsSync();
-      final backupContent = hadRealEnv ? realEnv.readAsStringSync() : null;
-      envFile.copySync('.env');
-
-      try {
-        final config = BrantaConfig.fromEnvironment(
-          baseUrl: 'https://example.com',
-        );
-
-        expect(config.baseUrl, equals('https://example.com'));
-        expect(config.apiKey, equals('env-api-key'));
-        expect(config.hmacSecret, equals('env-hmac-secret'));
-      } finally {
-        if (hadRealEnv) {
-          realEnv.writeAsStringSync(backupContent!);
-        } else {
-          if (realEnv.existsSync()) realEnv.deleteSync();
-        }
-        if (envFile.existsSync()) envFile.deleteSync();
-      }
+      expect(client.countGetCalls(_encryptedBolt11), equals(1));
     });
   });
 
-  group('BrantaClient', () {
-    const baseUrl = 'http://localhost:3000';
+  // -------------------------------------------------------------------------
+  // BrantaService — GetPaymentsAsync
+  // -------------------------------------------------------------------------
+  group('BrantaService.getPaymentsAsync', () {
+    late MockBrantaClient client;
+    late MockAesEncryption aes;
+    late BrantaService service;
+    late BrantaService strictService;
 
-    Payment makePayment([String address = 'addr1']) {
-      return Payment(destinations: [Destination(value: address)], ttl: 3600);
-    }
-
-    test('getPaymentsAsync URL-encodes address in request path', () async {
-      late http.Request captured;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response('[]', 200);
-        }),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
-
-      await client.getPaymentsAsync('addr+with+plus');
-
-      expect(captured.url.toString(), equals('$baseUrl/v2/payments/addr%2Bwith%2Bplus'));
-      client.dispose();
+    setUp(() {
+      client = MockBrantaClient();
+      aes = MockAesEncryption();
+      _setupDefaultMocks(aes);
+      service = _makeService(client, aes);
+      strictService = _makeService(client, aes, strict: true);
     });
 
-    test('getPaymentsAsync throws when platformLogoUrl domain does not match baseUrl', () async {
-      final payment = makePayment();
-      final paymentWithLogo = Payment(
-        destinations: payment.destinations,
-        ttl: payment.ttl,
-        platformLogoUrl: 'https://evil.com/logo.png',
-      );
-      final body = json.encode([paymentWithLogo.toJson()]);
+    test('returns payments when client succeeds', () async {
+      client.setupGetPayments(_bitcoinAddress, [_plainBitcoinPayment]);
 
-      final client = BrantaClient(
-        httpClient: MockClient((_) async => http.Response(body, 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
+      final result = await service.getPaymentsAsync(_bitcoinAddress);
 
+      expect(result.payments.length, equals(1));
+      expect(result.payments[0].destinations[0].value,
+          equals(_bitcoinAddress));
+    });
+
+    test('returns empty list with verifyUrl when client returns empty', () async {
+      final result = await service.getPaymentsAsync(_bitcoinAddress);
+
+      expect(result.payments, isEmpty);
+      expect(result.verifyUrl,
+          equals('http://localhost:3000/v2/verify/$_bitcoinAddress'));
+    });
+
+    test('forwards options to client', () async {
+      client.setupGetPayments(_bitcoinAddress, [_plainBitcoinPayment]);
+
+      await service.getPaymentsAsync(_bitcoinAddress, options: _looseOptions);
+
+      expect(client.getPaymentsCalls.last.options, equals(_looseOptions));
+    });
+
+    test('ZK bitcoin address decrypts destination value', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+
+      final result = await service.getPaymentsAsync(_encryptedBitcoinAddress,
+          destinationEncryptionKey: _secret);
+
+      expect(result.payments.length, equals(1));
+      expect(result.payments[0].destinations[0].value,
+          equals(_bitcoinAddress));
       expect(
-        () => client.getPaymentsAsync('addr1'),
-        throwsA(isA<BrantaPaymentException>().having(
-          (e) => e.toString(),
-          'message',
-          contains('platformLogoUrl domain does not match'),
-        )),
-      );
-      client.dispose();
+          aes.countDecryptCalls(_encryptedBitcoinAddress, _secret), equals(1));
     });
 
-    test('getPaymentsAsync allows platformLogoUrl from the same domain', () async {
-      final payment = makePayment();
-      final paymentWithLogo = Payment(
-        destinations: payment.destinations,
-        ttl: payment.ttl,
-        platformLogoUrl: '$baseUrl/logo.png',
-      );
-      final body = json.encode([paymentWithLogo.toJson()]);
+    test('ZK bitcoin address without key leaves destination encrypted',
+        () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
 
-      final client = BrantaClient(
-        httpClient: MockClient((_) async => http.Response(body, 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
+      final result =
+          await service.getPaymentsAsync(_encryptedBitcoinAddress);
 
-      final result = await client.getPaymentsAsync('addr1');
-      expect(result.length, equals(1));
-      client.dispose();
+      expect(result.payments[0].destinations[0].value,
+          equals(_encryptedBitcoinAddress));
+      expect(result.payments[0].destinations[0].isEncrypted, isTrue);
+      expect(aes.decryptCalls, isEmpty);
     });
 
-    test('getPaymentsAsync returns empty list on non-200', () async {
-      final client = BrantaClient(
-        httpClient: MockClient((_) async => http.Response('', 404)),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
+    test('ZK bitcoin address with wrong key leaves destination encrypted',
+        () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      aes.setupDecryptThrows(_encryptedBitcoinAddress, 'wrong-key',
+          Exception('Decryption failed: auth tag mismatch'));
 
-      expect(await client.getPaymentsAsync('addr1'), isEmpty);
-      client.dispose();
+      final result = await service.getPaymentsAsync(_encryptedBitcoinAddress,
+          destinationEncryptionKey: 'wrong-key');
+
+      expect(result.payments[0].destinations[0].value,
+          equals(_encryptedBitcoinAddress));
+      expect(result.payments[0].destinations[0].isEncrypted, isTrue);
     });
 
-    test('getPaymentsAsync returns empty list on empty body', () async {
-      final client = BrantaClient(
-        httpClient: MockClient((_) async => http.Response('', 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
+    test('non-ZK destination does not attempt decryption', () async {
+      client.setupGetPayments(_bitcoinAddress, [_plainBitcoinPayment]);
 
-      expect(await client.getPaymentsAsync('addr1'), isEmpty);
-      client.dispose();
+      final result = await service.getPaymentsAsync(_bitcoinAddress,
+          destinationEncryptionKey: _secret);
+
+      expect(result.payments[0].destinations[0].value,
+          equals(_bitcoinAddress));
+      expect(aes.decryptCalls, isEmpty);
     });
 
-    test('getPaymentsAsync parses payment list', () async {
-      final payment = makePayment();
-      final body = json.encode([payment.toJson()]);
+    test('ZK bolt11 with bolt11 lookup decrypts using hash', () async {
+      client.setupGetPayments(_encryptedBolt11, [_zkBolt11Payment]);
 
-      final client = BrantaClient(
-        httpClient: MockClient((_) async => http.Response(body, 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
+      final result = await service.getPaymentsAsync(_bolt11Invoice);
 
-      final result = await client.getPaymentsAsync('addr1');
-      expect(result.length, equals(1));
-      expect(result[0].destinations[0].value, equals('addr1'));
-      client.dispose();
+      expect(result.payments.length, equals(1));
+      expect(result.payments[0].destinations[0].value,
+          equals(_decryptedBolt11));
+      expect(client.countGetCalls(_encryptedBolt11), equals(1));
+      expect(aes.countDecryptCalls(_encryptedBolt11, _bolt11Hash), equals(1));
     });
 
-    test('getPaymentsAsync returns empty list on network exception', () async {
-      final client = BrantaClient(
-        httpClient: MockClient((_) async => throw Exception('network error')),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
+    test('ZK bolt11 with non-bolt11 lookup does not decrypt', () async {
+      const nonBolt11 = 'not-a-bolt11-value';
+      client.setupGetPayments(nonBolt11, [_zkBolt11Payment]);
 
-      expect(await client.getPaymentsAsync('addr1'), isEmpty);
-      client.dispose();
+      final result = await service.getPaymentsAsync(nonBolt11);
+
+      expect(result.payments[0].destinations[0].value,
+          equals(_encryptedBolt11));
+      expect(client.countGetCalls(nonBolt11), equals(1));
+      expect(aes.decryptCalls, isEmpty);
     });
 
-    test('addPaymentAsync sends POST with correct headers and body', () async {
-      final payment = makePayment();
-      final responseBody = json.encode(payment.toJson());
+    test('non-ZK bolt11 destination does not decrypt', () async {
+      client.setupGetPayments(_encryptedBolt11, [_plainBolt11Payment]);
 
-      late http.Request captured;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response(responseBody, 200);
-        }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
-      );
+      final result = await service.getPaymentsAsync(_bolt11Invoice);
 
-      final result = await client.addPaymentAsync(payment);
-
-      expect(captured.method, equals('POST'));
-      expect(captured.url.toString(), equals('$baseUrl/v2/payments'));
-      expect(captured.headers['Authorization'], equals('Bearer test-key'));
-      expect(result.destinations[0].value, equals('addr1'));
-      client.dispose();
+      expect(result.payments[0].destinations[0].value,
+          equals(_bolt11Invoice));
+      expect(client.countGetCalls(_encryptedBolt11), equals(1));
+      expect(aes.decryptCalls, isEmpty);
     });
 
-    test('addPaymentAsync throws Unauthorized when apiKey is null', () async {
-      final payment = makePayment();
+    test('plain bitcoin address sets verifyUrl', () async {
+      client.setupGetPayments(_bitcoinAddress, [_plainBitcoinPayment]);
 
-      final client = BrantaClient(
-        httpClient: MockClient((_) async => http.Response('', 200)),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
+      final result = await service.getPaymentsAsync(_bitcoinAddress);
 
-      expect(
-        () => client.addPaymentAsync(payment),
-        throwsA(isA<BrantaPaymentException>().having(
-          (e) => e.toString(),
-          'message',
-          contains('Unauthorized'),
-        )),
-      );
-      client.dispose();
+      expect(result.verifyUrl,
+          equals('http://localhost:3000/v2/verify/$_bitcoinAddress'));
     });
 
-    test('addPaymentAsync throws on non-2xx response', () async {
-      final payment = makePayment();
+    test('plain bolt11 fallback sets verifyUrl to plain value', () async {
+      client.setupGetPayments(_bolt11Invoice, [_plainBolt11Payment]);
 
-      final client = BrantaClient(
-        httpClient: MockClient((_) async => http.Response('Bad Request', 400)),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
-      );
+      final result = await service.getPaymentsAsync(_bolt11Invoice);
 
-      expect(
-        () => client.addPaymentAsync(payment),
-        throwsA(isA<BrantaPaymentException>().having(
-          (e) => e.toString(),
-          'message',
-          contains('400'),
-        )),
-      );
-      client.dispose();
+      expect(result.verifyUrl,
+          equals('http://localhost:3000/v2/verify/$_bolt11Invoice'));
     });
 
-    test('addPaymentAsync sends HMAC headers when hmacSecret is set', () async {
-      final payment = makePayment();
-
-      late http.Request captured;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response(json.encode(payment.toJson()), 200);
-        }),
-        config: BrantaConfig(
-          baseUrl: baseUrl,
-          apiKey: 'test-key',
-          hmacSecret: 'my-hmac-secret',
-        ),
-      );
-
-      await client.addPaymentAsync(payment);
-
-      expect(captured.headers.containsKey('X-HMAC-Signature'), isTrue);
-      expect(captured.headers.containsKey('X-HMAC-Timestamp'), isTrue);
-      client.dispose();
-    });
-
-    test('addPaymentAsync omits HMAC headers when hmacSecret is null', () async {
-      final payment = makePayment();
-
-      late http.Request captured;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response(json.encode(payment.toJson()), 200);
-        }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
-      );
-
-      await client.addPaymentAsync(payment);
-
-      expect(captured.headers.containsKey('X-HMAC-Signature'), isFalse);
-      expect(captured.headers.containsKey('X-HMAC-Timestamp'), isFalse);
-      client.dispose();
-    });
-
-    test('addPaymentAsync HMAC signature is a valid 64-char lowercase hex string', () async {
-      final payment = makePayment();
-
-      late http.Request captured;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response(json.encode(payment.toJson()), 200);
-        }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'my-hmac-secret'),
-      );
-
-      await client.addPaymentAsync(payment);
-
-      final signature = captured.headers['X-HMAC-Signature']!;
-      expect(signature.length, equals(64));
-      expect(RegExp(r'^[0-9a-f]+$').hasMatch(signature), isTrue);
-      client.dispose();
-    });
-
-    test('addPaymentAsync HMAC timestamp is a recent unix epoch second', () async {
-      final payment = makePayment();
-      final beforeSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
-      late http.Request captured;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response(json.encode(payment.toJson()), 200);
-        }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'my-hmac-secret'),
-      );
-
-      await client.addPaymentAsync(payment);
-      final afterSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
-      final timestamp = int.parse(captured.headers['X-HMAC-Timestamp']!);
-      expect(timestamp, greaterThanOrEqualTo(beforeSec));
-      expect(timestamp, lessThanOrEqualTo(afterSec));
-      client.dispose();
-    });
-
-    test('addPaymentAsync HMAC signature matches expected computation', () async {
-      final payment = makePayment();
-      const hmacSecret = 'my-hmac-secret';
-
-      late http.Request captured;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response(json.encode(payment.toJson()), 200);
-        }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: hmacSecret),
-      );
-
-      await client.addPaymentAsync(payment);
-
-      final signature = captured.headers['X-HMAC-Signature']!;
-      final timestamp = captured.headers['X-HMAC-Timestamp']!;
-      final body = captured.body;
-      final message = 'POST|$baseUrl/v2/payments|$body|$timestamp';
-      final expected = Hmac(sha256, utf8.encode(hmacSecret))
-          .convert(utf8.encode(message))
-          .toString();
-
-      expect(signature, equals(expected));
-      client.dispose();
-    });
-
-    test('addZKPaymentAsync sends HMAC headers via addPaymentAsync', () async {
-      final payment = makePayment();
-
-      late http.Request captured;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          captured = req;
-          return http.Response(json.encode(payment.toJson()), 200);
-        }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key', hmacSecret: 'zk-hmac-secret'),
-      );
-
-      await client.addZKPaymentAsync(payment);
-
-      expect(captured.headers.containsKey('X-HMAC-Signature'), isTrue);
-      expect(captured.headers.containsKey('X-HMAC-Timestamp'), isTrue);
-      client.dispose();
-    });
-
-    test('getZKPaymentsAsync decrypts zk destinations and leaves plain ones', () async {
-      const secret = 'test-secret';
-      const originalAddress = 'bc1qoriginaladdress';
-
-      final encrypted = await AesEncryption.encrypt(originalAddress, secret);
-      final payment = Payment(
-        destinations: [
-          Destination(value: encrypted, zk: true),
-          Destination(value: 'plain-addr', zk: false),
-        ],
-        ttl: 3600,
-      );
-
-      final client = BrantaClient(
-        httpClient: MockClient(
-          (_) async => http.Response(json.encode([payment.toJson()]), 200),
-        ),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
-
-      final result = await client.getZKPaymentsAsync('addr1', secret);
-
-      expect(result[0].destinations[0].value, equals(originalAddress));
-      expect(result[0].destinations[1].value, equals('plain-addr'));
-      client.dispose();
-    });
-
-    group('isApiKeyValidAsync', () {
-      test('returns true on 200', () async {
-        final client = BrantaClient(
-          httpClient: MockClient((_) async => http.Response('', 200)),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
-        );
-        expect(await client.isApiKeyValidAsync(), isTrue);
-        client.dispose();
-      });
-
-      test('returns false on 401', () async {
-        final client = BrantaClient(
-          httpClient: MockClient((_) async => http.Response('', 401)),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'bad-key'),
-        );
-        expect(await client.isApiKeyValidAsync(), isFalse);
-        client.dispose();
-      });
-
-      test('sends Authorization header with api key', () async {
-        late http.Request captured;
-        final client = BrantaClient(
-          httpClient: MockClient((req) async {
-            captured = req;
-            return http.Response('', 200);
-          }),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
-        );
-        await client.isApiKeyValidAsync();
-        expect(captured.headers['Authorization'], equals('Bearer my-key'));
-        client.dispose();
-      });
-
-      test('requests correct endpoint', () async {
-        late http.Request captured;
-        final client = BrantaClient(
-          httpClient: MockClient((req) async {
-            captured = req;
-            return http.Response('', 200);
-          }),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
-        );
-        await client.isApiKeyValidAsync();
-        expect(
-          captured.url.toString(),
-          equals('$baseUrl/v2/api-keys/health-check'),
-        );
-        client.dispose();
-      });
-
-      test('returns false on network exception', () async {
-        final client = BrantaClient(
-          httpClient: MockClient((_) async => throw Exception('network error')),
-          config: BrantaConfig(baseUrl: baseUrl, apiKey: 'my-key'),
-        );
-        expect(await client.isApiKeyValidAsync(), isFalse);
-        client.dispose();
-      });
-    });
-
-    group('getPaymentsByQRCodeAsync', () {
-      BrantaClient makeClient(MockClient mock) => BrantaClient(
-        httpClient: mock,
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
-
-      // Returns a MockClient that captures requests and returns an empty list.
-      (MockClient, List<Uri>) capturingMock() {
-        final urls = <Uri>[];
-        return (
-          MockClient((req) async {
-            urls.add(req.url);
-            return http.Response('[]', 200);
-          }),
-          urls,
-        );
-      }
-
-      test('ZK query params routes to getZKPaymentsAsync with correct id and secret', () async {
-        const secret = 'zk-secret';
-        const originalAddress = 'bc1qoriginaladdress';
-        final encrypted = await AesEncryption.encrypt(originalAddress, secret);
-        final payment = Payment(
-          destinations: [Destination(value: encrypted, zk: true)],
-          ttl: 3600,
-        );
-
-        late Uri capturedUrl;
-        final client = makeClient(MockClient((req) async {
-          capturedUrl = req.url;
-          return http.Response(json.encode([payment.toJson()]), 200);
-        }));
-
-        final result = await client.getPaymentsByQRCodeAsync(
-          'bitcoin:$originalAddress?branta_id=PAYMENT_ID&branta_secret=$secret',
-        );
-
-        expect(capturedUrl.toString(), equals('$baseUrl/v2/payments/PAYMENT_ID'));
-        expect(result[0].destinations[0].value, equals(originalAddress));
-        client.dispose();
-      });
-
-      test('bitcoin segwit (bc1q) URI strips prefix and lowercases', () async {
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-        await client.getPaymentsByQRCodeAsync('bitcoin:BC1QABC123');
-        expect(urls[0].pathSegments.last, equals('bc1qabc123'));
-        client.dispose();
-      });
-
-      test('bitcoin non-segwit URI strips prefix and preserves case', () async {
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-        await client.getPaymentsByQRCodeAsync('bitcoin:1ABCDef');
-        expect(urls[0].pathSegments.last, equals('1ABCDef'));
-        client.dispose();
-      });
-
-      test('bitcoin bcrt URI strips prefix and lowercases', () async {
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-        await client.getPaymentsByQRCodeAsync('bitcoin:BCRT1QABC');
-        expect(urls[0].pathSegments.last, equals('bcrt1qabc'));
-        client.dispose();
-      });
-
-      test('lightning URI strips prefix and lowercases', () async {
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-        await client.getPaymentsByQRCodeAsync('lightning:LNBC1234TEST');
-        expect(urls[0].pathSegments.last, equals('lnbc1234test'));
-        client.dispose();
-      });
-
-      test('lnbc prefix without scheme lowercases', () async {
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-        await client.getPaymentsByQRCodeAsync('LNBC1234TEST');
-        expect(urls[0].pathSegments.last, equals('lnbc1234test'));
-        client.dispose();
-      });
-
-      test('bc1q prefix without scheme lowercases', () async {
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-        await client.getPaymentsByQRCodeAsync('BC1QABC123');
-        expect(urls[0].pathSegments.last, equals('bc1qabc123'));
-        client.dispose();
-      });
-
-      test('Branta verify URL extracts address', () async {
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-        await client.getPaymentsByQRCodeAsync('$baseUrl/v2/verify/bc1qabc123');
-        expect(urls[0].pathSegments.last, equals('bc1qabc123'));
-        client.dispose();
-      });
-
-      test('Branta zk-verify URL extracts id and secret from fragment', () async {
-        const secret = 'zk-frag-secret';
-        const originalAddress = 'bc1qzkaddr';
-        final encrypted = await AesEncryption.encrypt(originalAddress, secret);
-        final payment = Payment(
-          destinations: [Destination(value: encrypted, zk: true)],
-          ttl: 3600,
-        );
-
-        late Uri capturedUrl;
-        final client = makeClient(MockClient((req) async {
-          capturedUrl = req.url;
-          return http.Response(json.encode([payment.toJson()]), 200);
-        }));
-
-        final result = await client.getPaymentsByQRCodeAsync(
-          '$baseUrl/v2/zk-verify/ZK_PAYMENT_ID#secret=$secret',
-        );
-
-        expect(capturedUrl.toString(), equals('$baseUrl/v2/payments/ZK_PAYMENT_ID'));
-        expect(result[0].destinations[0].value, equals(originalAddress));
-        client.dispose();
-      });
-
-      test('branta_id containing + is preserved (not decoded as space)', () async {
-        const brantaId = 'KEY+WITH+PLUS==';
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-
-        await client.getPaymentsByQRCodeAsync(
-          'http://example.com?branta_id=${Uri.encodeComponent(brantaId)}&branta_secret=secret',
-        );
-
-        expect(
-          Uri.decodeComponent(urls[0].pathSegments.last),
-          equals(brantaId),
-        );
-        client.dispose();
-      });
-
-      test('fragment secret containing + is preserved (not decoded as space)', () async {
-        const secret = 'SECRET+WITH+PLUS';
-        const originalAddress = 'bc1qzkaddr';
-        final encrypted = await AesEncryption.encrypt(originalAddress, secret);
-        final payment = Payment(
-          destinations: [Destination(value: encrypted, zk: true)],
-          ttl: 3600,
-        );
-
-        final client = makeClient(MockClient(
-          (_) async => http.Response(json.encode([payment.toJson()]), 200),
-        ));
-
-        final result = await client.getPaymentsByQRCodeAsync(
-          '$baseUrl/v2/zk-verify/ZKID#secret=${Uri.encodeComponent(secret)}',
-        );
-
-        expect(result[0].destinations[0].value, equals(originalAddress));
-        client.dispose();
-      });
-
-      test('plain address is used as-is', () async {
-        final (mock, urls) = capturingMock();
-        final client = makeClient(mock);
-        await client.getPaymentsByQRCodeAsync('1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf');
-        expect(urls[0].pathSegments.last, equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf'));
-        client.dispose();
-      });
-    });
-
-    test('getPaymentsAsync sets verifyUrl on returned payments', () async {
-      final payment = makePayment('bc1qabc');
-      final client = BrantaClient(
-        httpClient: MockClient(
-          (_) async => http.Response(json.encode([payment.toJson()]), 200),
-        ),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
-
-      final result = await client.getPaymentsAsync('bc1qabc');
-
-      expect(result[0].verifyUrl, equals('$baseUrl/v2/verify/bc1qabc'));
-      client.dispose();
-    });
-
-    test('getZKPaymentsAsync sets ZK verifyUrl with secret fragment on returned payments', () async {
-      const secret = 'test-secret';
-      const address = 'bc1qabc';
-      final encrypted = await AesEncryption.encrypt(address, secret);
-      final payment = Payment(
-        destinations: [Destination(value: encrypted, zk: true)],
-        ttl: 3600,
-      );
-      final client = BrantaClient(
-        httpClient: MockClient(
-          (_) async => http.Response(json.encode([payment.toJson()]), 200),
-        ),
-        config: BrantaConfig(baseUrl: baseUrl),
-      );
-
-      final result = await client.getZKPaymentsAsync(address, secret);
-
-      expect(
-        result[0].verifyUrl,
-        equals('$baseUrl/v2/zk-verify/${Uri.encodeComponent(address)}#secret=$secret'),
-      );
-      client.dispose();
-    });
-
-    test('addPaymentAsync sets verifyUrl on returned payment', () async {
-      final payment = makePayment('bc1qabc');
-      final client = BrantaClient(
-        httpClient: MockClient(
-          (_) async => http.Response(json.encode(payment.toJson()), 200),
-        ),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
-      );
-
-      final result = await client.addPaymentAsync(payment);
-
-      expect(result.verifyUrl, equals('$baseUrl/v2/verify/bc1qabc'));
-      client.dispose();
-    });
-
-    test('addZKPaymentAsync sets ZK verifyUrl on returned payment', () async {
-      const address = 'bc1qabc';
-      final payment = makePayment(address);
-      late String capturedEncryptedAddress;
-      final client = BrantaClient(
-        httpClient: MockClient((req) async {
-          final body = json.decode(req.body) as Map<String, dynamic>;
-          capturedEncryptedAddress = (body['destinations'] as List).first['value'] as String;
-          return http.Response(json.encode(payment.toJson()), 200);
-        }),
-        config: BrantaConfig(baseUrl: baseUrl, apiKey: 'test-key'),
-      );
-
-      final (result, secret) = await client.addZKPaymentAsync(payment);
+    test('ZK bitcoin address sets verifyUrl with key fragment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
+      final zkId = payment.destinations[0].zkId!;
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+
+      final result = await service.getPaymentsAsync(_encryptedBitcoinAddress,
+          destinationEncryptionKey: _secret);
 
       expect(
         result.verifyUrl,
-        equals('$baseUrl/v2/zk-verify/${Uri.encodeComponent(capturedEncryptedAddress)}#secret=$secret'),
+        equals(
+            'http://localhost:3000/v2/verify/${Uri.encodeComponent(_encryptedBitcoinAddress)}#k-$zkId=$_secret'),
       );
-      client.dispose();
+    });
+
+    test('ZK bolt11 sets verifyUrl with key fragment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_encryptedBolt11, type: DestinationType.bolt11)
+          .setZk()
+          .build();
+      final zkId = payment.destinations[0].zkId!;
+      client.setupGetPayments(_encryptedBolt11, [payment]);
+
+      final result = await service.getPaymentsAsync(_bolt11Invoice);
+
+      expect(
+        result.verifyUrl,
+        equals(
+            'http://localhost:3000/v2/verify/${Uri.encodeComponent(_encryptedBolt11)}#k-$zkId=$_bolt11Hash'),
+      );
+    });
+
+    test('loose mode bolt11 not found falls back to plain and sets plain verifyUrl',
+        () async {
+      // encrypted lookup returns empty, plain lookup also empty (default)
+
+      final result = await service.getPaymentsAsync(_bolt11Invoice);
+
+      expect(result.payments, isEmpty);
+      expect(result.verifyUrl,
+          equals('http://localhost:3000/v2/verify/$_bolt11Invoice'));
+      expect(client.countGetCalls(_encryptedBolt11), equals(1));
+      expect(client.countGetCalls(_bolt11Invoice), equals(1));
+    });
+
+    // Strict mode
+    test('strict: plain bitcoin address throws BrantaPaymentException',
+        () async {
+      await expectLater(
+        () => strictService.getPaymentsAsync(_bitcoinAddress),
+        throwsA(isA<BrantaPaymentException>()),
+      );
+      expect(client.getPaymentsCalls, isEmpty);
+    });
+
+    test('strict: encrypted bitcoin with secret decrypts destination',
+        () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+
+      final result = await strictService.getPaymentsAsync(
+          _encryptedBitcoinAddress,
+          destinationEncryptionKey: _secret);
+
+      expect(result.payments.length, equals(1));
+      expect(result.payments[0].destinations[0].value,
+          equals(_bitcoinAddress));
+      expect(result.payments[0].destinations[0].isEncrypted, isFalse);
+      expect(client.countGetCalls(_encryptedBitcoinAddress), equals(1));
+      expect(
+          aes.countDecryptCalls(_encryptedBitcoinAddress, _secret), equals(1));
+      expect(aes.encryptCalls, isEmpty);
+    });
+
+    test('strict: encrypted bitcoin with secret sets verifyUrl with fragment',
+        () async {
+      final payment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
+      final zkId = payment.destinations[0].zkId!;
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+
+      final result = await strictService.getPaymentsAsync(
+          _encryptedBitcoinAddress,
+          destinationEncryptionKey: _secret);
+
+      expect(
+        result.verifyUrl,
+        equals(
+            'http://localhost:3000/v2/verify/${Uri.encodeComponent(_encryptedBitcoinAddress)}#k-$zkId=$_secret'),
+      );
+    });
+
+    test('strict: encrypted bitcoin with wrong key leaves encrypted', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      aes.setupDecryptThrows(_encryptedBitcoinAddress, 'wrong-key',
+          Exception('Decryption failed: auth tag mismatch'));
+
+      final result = await strictService.getPaymentsAsync(
+          _encryptedBitcoinAddress,
+          destinationEncryptionKey: 'wrong-key');
+
+      expect(result.payments[0].destinations[0].value,
+          equals(_encryptedBitcoinAddress));
+      expect(result.payments[0].destinations[0].isEncrypted, isTrue);
+    });
+
+    test('strict: bolt11 does not throw and uses encrypted lookup', () async {
+      client.setupGetPayments(_encryptedBolt11, [_zkBolt11Payment]);
+
+      await strictService.getPaymentsAsync(_bolt11Invoice);
+
+      expect(client.countGetCalls(_encryptedBolt11), equals(1));
+    });
+
+    test('strict: ark address does not throw and uses encrypted lookup',
+        () async {
+      client.setupGetPayments(_encryptedArkAddress, [_zkArkPayment]);
+
+      await strictService.getPaymentsAsync(_arkAddress);
+
+      expect(client.countGetCalls(_encryptedArkAddress), equals(1));
+    });
+
+    test('strict: bolt11 does not fall back to plain text lookup', () async {
+      client.setupGetPayments(_bolt11Invoice, [_plainBolt11Payment]);
+
+      final result = await strictService.getPaymentsAsync(_bolt11Invoice);
+
+      expect(result.payments, isEmpty);
+      expect(result.verifyUrl,
+          equals('http://localhost:3000/v2/verify/${Uri.encodeComponent(_encryptedBolt11)}'));
+      expect(client.countGetCalls(_encryptedBolt11), equals(1));
+      expect(client.countGetCalls(_bolt11Invoice), equals(0));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // BrantaService — AddPaymentAsync
+  // -------------------------------------------------------------------------
+  group('BrantaService.addPaymentAsync', () {
+    late MockBrantaClient client;
+    late MockAesEncryption aes;
+    late BrantaService service;
+    late BrantaService strictService;
+
+    setUp(() {
+      client = MockBrantaClient();
+      aes = MockAesEncryption();
+      _setupDefaultMocks(aes);
+      service = _makeService(client, aes);
+      strictService = _makeService(client, aes, strict: true);
+    });
+
+    test('plain destination does not encrypt', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .build();
+      client.setupPostPayment(_plainBitcoinPayment);
+
+      await service.addPaymentAsync(payment);
+
+      expect(aes.encryptCalls, isEmpty);
+    });
+
+    test('ZK bitcoin address encrypts with generated secret', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
+      final zkId = payment.destinations[0].zkId!;
+
+      final responsePayment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .build();
+      responsePayment.destinations[0].isZk = true;
+      responsePayment.destinations[0].zkId = zkId;
+
+      client.setupPostPayment(responsePayment);
+
+      final result = await service.addPaymentAsync(payment);
+
+      expect(aes.countEncryptCalls(_bitcoinAddress, _secret), equals(1));
+      expect(result.secret, equals(_secret));
+      expect(payment.destinations[0].value, equals(_encryptedBitcoinAddress));
+    });
+
+    test('ZK bolt11 encrypts with deterministic hash', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bolt11Invoice, type: DestinationType.bolt11)
+          .setZk()
+          .build();
+      final zkId = payment.destinations[0].zkId!;
+
+      final responsePayment = PaymentBuilder()
+          .addDestination(_encryptedBolt11, type: DestinationType.bolt11)
+          .build();
+      responsePayment.destinations[0].isZk = true;
+      responsePayment.destinations[0].zkId = zkId;
+
+      client.setupPostPayment(responsePayment);
+
+      await service.addPaymentAsync(payment);
+
+      expect(
+          aes.countEncryptCalls(_bolt11Invoice, _bolt11Hash,
+              deterministicNonce: true),
+          equals(1));
+      expect(payment.destinations[0].value, equals(_encryptedBolt11));
+    });
+
+    test('ZK ark address encrypts with deterministic hash', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_arkAddress, type: DestinationType.arkAddress)
+          .setZk()
+          .build();
+      final zkId = payment.destinations[0].zkId!;
+
+      final responsePayment = PaymentBuilder()
+          .addDestination(_encryptedArkAddress,
+              type: DestinationType.arkAddress)
+          .build();
+      responsePayment.destinations[0].isZk = true;
+      responsePayment.destinations[0].zkId = zkId;
+
+      client.setupPostPayment(responsePayment);
+
+      await service.addPaymentAsync(payment);
+
+      expect(
+          aes.countEncryptCalls(_arkAddress, _arkHash,
+              deterministicNonce: true),
+          equals(1));
+      expect(payment.destinations[0].value, equals(_encryptedArkAddress));
+    });
+
+    test('ZK bitcoin sets verifyUrl with key fragment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
+      final zkId = payment.destinations[0].zkId!;
+
+      final responsePayment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .build();
+      responsePayment.destinations[0].isZk = true;
+      responsePayment.destinations[0].zkId = zkId;
+
+      client.setupPostPayment(responsePayment);
+
+      final result = await service.addPaymentAsync(payment);
+
+      expect(
+        result.verifyUrl,
+        equals(
+            'http://localhost:3000/v2/verify/${Uri.encodeComponent(_encryptedBitcoinAddress)}#k-$zkId=$_secret'),
+      );
+    });
+
+    test('returns generated secret', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
+
+      final responsePayment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .build();
+      responsePayment.destinations[0].isZk = true;
+      responsePayment.destinations[0].zkId = payment.destinations[0].zkId!;
+
+      client.setupPostPayment(responsePayment);
+
+      final result = await service.addPaymentAsync(payment);
+
+      expect(result.secret, equals(_secret));
+    });
+
+    test('unsupported ZK type throws without calling client', () async {
+      final payment = PaymentBuilder()
+          .addDestination('0xdeadbeef', type: DestinationType.tetherAddress)
+          .setZk()
+          .build();
+
+      await expectLater(
+        () => service.addPaymentAsync(payment),
+        throwsA(isA<BrantaPaymentException>()),
+      );
+      expect(client.postPaymentCallCount, equals(0));
+    });
+
+    // Strict mode
+    test('strict: plain destination throws BrantaPaymentException', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .build();
+
+      await expectLater(
+        () => strictService.addPaymentAsync(payment),
+        throwsA(isA<BrantaPaymentException>()),
+      );
+      expect(client.postPaymentCallCount, equals(0));
+    });
+
+    test('strict: all ZK destinations succeeds', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
+      final zkId = payment.destinations[0].zkId!;
+
+      final responsePayment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .build();
+      responsePayment.destinations[0].isZk = true;
+      responsePayment.destinations[0].zkId = zkId;
+
+      client.setupPostPayment(responsePayment);
+
+      await strictService.addPaymentAsync(payment);
+
+      expect(client.postPaymentCallCount, equals(1));
+    });
+
+    test('strict: mixed destinations throws BrantaPaymentException', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress,
+              type: DestinationType.bitcoinAddress)
+          .setZk()
+          .addDestination(_bolt11Invoice, type: DestinationType.bolt11)
+          .build();
+
+      await expectLater(
+        () => strictService.addPaymentAsync(payment),
+        throwsA(isA<BrantaPaymentException>()),
+      );
+      expect(client.postPaymentCallCount, equals(0));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // BrantaService — IsApiKeyValidAsync
+  // -------------------------------------------------------------------------
+  group('BrantaService.isApiKeyValidAsync', () {
+    late MockBrantaClient client;
+    late MockAesEncryption aes;
+    late BrantaService service;
+
+    setUp(() {
+      client = MockBrantaClient();
+      aes = MockAesEncryption();
+      service = _makeService(client, aes);
+    });
+
+    test('returns true when client returns true', () async {
+      client.setIsApiKeyValid(true);
+      expect(await service.isApiKeyValidAsync(), isTrue);
+    });
+
+    test('returns false when client returns false', () async {
+      client.setIsApiKeyValid(false);
+      expect(await service.isApiKeyValidAsync(), isFalse);
+    });
+
+    test('forwards options to client', () async {
+      await service.isApiKeyValidAsync(options: _looseOptions);
+      expect(client.lastIsApiKeyValidOptions, equals(_looseOptions));
     });
   });
 }

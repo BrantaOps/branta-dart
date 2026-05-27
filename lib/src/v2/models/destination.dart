@@ -1,17 +1,39 @@
-import 'package:json_annotation/json_annotation.dart';
-import 'destination_type.dart';
+import '../../../src/enums/destination_type.dart';
 
-part 'destination.g.dart';
-
-@JsonSerializable()
 class Destination {
   String value;
-  final bool zk;
-  final DestinationType? type;
+  bool isPrimary;
+  bool isZk;
 
-  Destination({required this.value, this.zk = false, this.type});
+  /// Runtime-only flag set by [BrantaService] after a lookup.
+  /// Not serialized to/from JSON.
+  bool isEncrypted;
 
-  factory Destination.fromJson(Map<String, dynamic> json) =>
-      _$DestinationFromJson(json);
-  Map<String, dynamic> toJson() => _$DestinationToJson(this);
+  DestinationType? type;
+  String? zkId;
+
+  Destination({
+    required this.value,
+    this.isPrimary = false,
+    this.isZk = false,
+    this.isEncrypted = false,
+    this.type,
+    this.zkId,
+  });
+
+  factory Destination.fromJson(Map<String, dynamic> json) => Destination(
+        value: json['value'] as String,
+        isPrimary: json['primary'] as bool? ?? false,
+        isZk: json['zk'] as bool? ?? false,
+        type: DestinationType.fromJson(json['type'] as String?),
+        zkId: json['zk_id'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'value': value,
+        'primary': isPrimary,
+        'zk': isZk,
+        if (type != null) 'type': type!.jsonValue,
+        if (zkId != null) 'zk_id': zkId,
+      };
 }
