@@ -1,28 +1,34 @@
-import 'package:branta/src/v2/classes/payment_builder.dart';
-import 'package:http/http.dart' as http;
-import 'package:branta/branta.dart' as v2;
 import 'dart:convert';
-import 'package:dotenv/dotenv.dart';
+import 'package:branta/branta.dart';
+import 'package:http/http.dart' as http;
 
 Future<void> main() async {
-  final dotenv = DotEnv();
-  dotenv.load();
+  const apiKey = String.fromEnvironment('BRANTA_API_KEY');
 
-  final config = v2.BrantaConfig.staging(
-    apiKey: dotenv.getOrElse('BRANTA_API_KEY', () => ''),
+  final options = BrantaClientOptions(
+    baseUrl: BrantaServerBaseUrl.staging,
+    defaultApiKey: apiKey,
+    privacy: PrivacyMode.loose,
   );
 
-  var brantaClient = v2.BrantaClient(
-    httpClient: http.Client(),
-    config: config,
+  final httpClient = http.Client();
+  final brantaClient = BrantaClient(
+    httpClient: httpClient,
+    defaultOptions: options,
+  );
+
+  final service = BrantaService(
+    client: brantaClient,
+    aesEncryption: AesEncryptionService(),
+    defaultOptions: options,
   );
 
   try {
     var address = "address1";
-    var result = await brantaClient.getPaymentsAsync(address);
+    var result = await service.getPaymentsAsync(address);
 
     print('Get Payment Response ----------------------');
-    for (var payment in result) {
+    for (var payment in result.payments) {
       var json = JsonEncoder.withIndent('  ').convert(payment.toJson());
       print('Payment: $json');
     }
@@ -30,10 +36,11 @@ Future<void> main() async {
     var zkAddress =
         "pQerSFV+fievHP+guYoGJjx1CzFFrYWHAgWrLhn5473Z19M6+WMScLd1hsk808AEF/x+GpZKmNacFBf5BbQ=";
     var zkSecret = "1234";
-    var result2 = await brantaClient.getZKPaymentsAsync(zkAddress, zkSecret);
+    var result2 = await service.getPaymentsAsync(zkAddress,
+        destinationEncryptionKey: zkSecret);
 
     print('Get ZK Payment Response -------------------');
-    for (var payment in result2) {
+    for (var payment in result2.payments) {
       var json = JsonEncoder.withIndent('  ').convert(payment.toJson());
       print('Payment: $json');
     }
@@ -46,8 +53,8 @@ Future<void> main() async {
         .addDestination("address2")
         .build();
 
-    var result3 = await brantaClient.addPaymentAsync(payment);
-    var json = JsonEncoder.withIndent('  ').convert(result3.toJson());
+    var result3 = await service.addPaymentAsync(payment);
+    var json = JsonEncoder.withIndent('  ').convert(result3.payment.toJson());
     print('Payment: $json');
   } finally {
     brantaClient.dispose();
