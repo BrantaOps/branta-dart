@@ -2,23 +2,27 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
-import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/cryptography.dart' hide Hmac;
 
 class AesEncryption {
-  static Future<String> encrypt(String value, String secret) async {
+  static Future<String> encrypt(String value, String secret, {bool deterministicNonce = false}) async {
     try {
-      final keyData = sha256.convert(utf8.encode(secret)).bytes;
+      final keyData = Uint8List.fromList(sha256.convert(utf8.encode(secret)).bytes);
 
       final iv = Uint8List(12);
-      final random = Random.secure();
-      for (int i = 0; i < iv.length; i++) {
-        iv[i] = random.nextInt(256);
+      if (!deterministicNonce) {
+        final random = Random.secure();
+        for (int i = 0; i < iv.length; i++) {
+          iv[i] = random.nextInt(256);
+        }
+      } else {
+        final hmac = Hmac(sha256, keyData);
+        final derived = hmac.convert(utf8.encode(value)).bytes;
+        iv.setRange(0, 12, derived.take(12));
       }
 
       final plaintext = utf8.encode(value);
-
       final algorithm = AesGcm.with256bits(nonceLength: 12);
-
       final secretKey = SecretKey(keyData);
 
       final secretBox = await algorithm.encrypt(
@@ -43,12 +47,11 @@ class AesEncryption {
 
   static Future<String> decrypt(String encryptedValue, String secret) async {
     try {
-      final keyData = sha256.convert(utf8.encode(secret)).bytes;
-
+      final keyData = Uint8List.fromList(sha256.convert(utf8.encode(secret)).bytes);
       final encryptedBytes = base64.decode(encryptedValue);
 
       if (encryptedBytes.length < 28) {
-        throw Exception('Invalid encrypted data: too short');
+        throw ArgumentError('Invalid encrypted data: too short');
       }
 
       final iv = encryptedBytes.sublist(0, 12);
@@ -56,17 +59,13 @@ class AesEncryption {
       final tag = encryptedBytes.sublist(encryptedBytes.length - 16);
 
       final algorithm = AesGcm.with256bits(nonceLength: 12);
-
       final secretKey = SecretKey(keyData);
-
       final secretBox = SecretBox(ciphertext, nonce: iv, mac: Mac(tag));
 
-      final decryptedBytes = await algorithm.decrypt(
-        secretBox,
-        secretKey: secretKey,
-      );
-
+      final decryptedBytes = await algorithm.decrypt(secretBox, secretKey: secretKey);
       return utf8.decode(decryptedBytes);
+    } on ArgumentError {
+      rethrow;
     } catch (e) {
       throw Exception('Decryption failed: $e');
     }

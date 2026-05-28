@@ -1,43 +1,69 @@
-import 'package:json_annotation/json_annotation.dart';
 import 'destination.dart';
+import 'platform.dart';
 
-part 'payment.g.dart';
-
-@JsonSerializable()
 class Payment {
   String? description;
-  final List<Destination> destinations;
-
-  @JsonKey(name: 'created_at')
-  final DateTime? createdDate;
-
-  int? ttl;
-
+  List<Destination> destinations;
+  DateTime? createdAt;
+  int ttl;
   String? metadata;
-  final String? platform;
-
-  @JsonKey(name: 'platform_logo_url')
-  final String? platformLogoUrl;
-
-  @JsonKey(name: 'platform_logo_light_url')
-  final String? platformLogoLightUrl;
-
-  @JsonKey(name: 'verify_url')
-  String? verifyUrl;
+  String? platform;
+  String? platformLogoUrl;
+  String? platformLogoLightUrl;
+  Platform? parentPlatform;
+  String? btcPayServerPluginVersion;
 
   Payment({
     this.description,
     required this.destinations,
-    this.createdDate,
-    this.ttl,
+    this.createdAt,
+    this.ttl = 0,
     this.metadata,
     this.platform,
     this.platformLogoUrl,
     this.platformLogoLightUrl,
-    this.verifyUrl,
+    this.parentPlatform,
+    this.btcPayServerPluginVersion,
   });
 
-  factory Payment.fromJson(Map<String, dynamic> json) =>
-      _$PaymentFromJson(json);
-  Map<String, dynamic> toJson() => _$PaymentToJson(this);
+  String getDefaultValue() {
+    if (destinations.isEmpty) throw Exception('Payment has no destinations.');
+    return destinations.first.value;
+  }
+
+  factory Payment.fromJson(Map<String, dynamic> json) => Payment(
+        description: json['description'] as String?,
+        destinations: (json['destinations'] as List<dynamic>?)
+                ?.map((e) => Destination.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        createdAt: json['created_at'] != null
+            ? DateTime.tryParse(json['created_at'] as String)
+            : null,
+        ttl: json['ttl'] as int? ?? 0,
+        metadata: json['metadata'] as String?,
+        platform: json['platform'] as String?,
+        platformLogoUrl: json['platform_logo_url'] as String?,
+        platformLogoLightUrl: json['platform_logo_light_url'] as String?,
+        parentPlatform: json['parent_platform'] != null
+            ? Platform.fromJson(json['parent_platform'] as Map<String, dynamic>)
+            : null,
+        btcPayServerPluginVersion:
+            json['btc_pay_server_plugin_version'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (description != null) 'description': description,
+        'destinations': destinations.map((d) => d.toJson()).toList(),
+        if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+        'ttl': ttl,
+        if (metadata != null) 'metadata': metadata,
+        if (platform != null) 'platform': platform,
+        if (platformLogoUrl != null) 'platform_logo_url': platformLogoUrl,
+        if (platformLogoLightUrl != null)
+          'platform_logo_light_url': platformLogoLightUrl,
+        if (parentPlatform != null) 'parent_platform': parentPlatform!.toJson(),
+        if (btcPayServerPluginVersion != null)
+          'btc_pay_server_plugin_version': btcPayServerPluginVersion,
+      };
 }
