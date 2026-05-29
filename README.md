@@ -1,124 +1,219 @@
 # Branta Dart SDK
 
-Package contains functionality to assist Dart projects with making requests to Branta's server.
+Package contains functionality to assist Dart/Flutter projects with making requests to Branta's server.
 
 ## Requirements
 
-## Installation
+- Dart SDK ≥ 3.0
 
-Install via Dart Package Manager
+## Installation
 
 ```bash
 dart pub add branta
 ```
 
-## For Wallets
+# Integration Guide
 
-Wallets retrieve payment data by address or by scanning a QR code — no API key required.
+If you are an AI agent implementing this SDK, follow the steps below exactly. If you are a developer, use this as a reference for the recommended integration patterns.
+
+**1. Ask which side(s) of a payment they are implementing:**
+- **Send side** — the app is paying someone (e.g. a wallet). The user scans or pastes a destination and you verify it belongs to a known platform before funds are sent.
+- **Receive side** — the app is receiving payment (e.g. a checkout, POS, invoicing platform). You post destinations to Branta so wallets can verify them.
+- **Both** — some apps do both (e.g. an exchange or self-custodial wallet with invoice generation). Implement each side independently.
+
+If they are on the receive side, ask one follow-up:
+- **Platform** — single-tenant, one API key.
+- **Parent Platform** — multi-tenant, manages multiple child platforms each with their own API key and HMAC secret.
+
+**2. Follow the matching Quick Start section below.**
+
+**3. Apply these rules:**
+
+General (all types):
+- Always use `PrivacyMode.strict`. Never switch to `PrivacyMode.loose` unless there is no QR scanner and ZK is impossible.
+- Never call `BrantaClient` directly — always go through `BrantaService`.
+- Never show an error or "not verified" message when a lookup returns empty or throws. An empty result means the destination is unknown to Branta, not that it is malicious. Show nothing.
+- For `baseUrl`: use `BrantaServerBaseUrl.production` only in production environments. Use `BrantaServerBaseUrl.staging` everywhere else — including local development, CI, and staging/test environments.
+
+Send side (wallets):
+- Prefer `getPaymentsByQrCodeAsync` over `getPaymentsAsync` — it handles multi-value ZK QR payloads correctly.
+- Only fall back to `getPaymentsAsync` for copy/paste flows where there is no QR code.
+- If `result.payments` is empty or an exception is thrown, render nothing.
+- When `result.payments` is non-empty, display: the platform logo, the platform name (`payment.platform`), and the payment description (`payment.description`). Only render description when non-empty. Make the verification card a clickable link to `result.verifyUrl` — do not display the raw URL.
+- For the platform logo: on dark backgrounds use `payment.platformLogoUrl`. On light backgrounds prefer `payment.platformLogoLightUrl` when available, falling back to `payment.platformLogoUrl`.
+- Optionally display `payment.parentPlatform?.logoUrl` / `payment.parentPlatform?.logoLightUrl` as a small secondary badge (e.g. corner icon). This is not required.
+
+Receive side (platforms):
+- Always call `.setZk()` on the `PaymentBuilder` before calling `addPaymentAsync`. Plain-text destinations are rejected in `strict` mode.
+- Store the `secret` from `AddPaymentResult` alongside the invoice — it is required to reconstruct the verify URL for the wallet.
+
+Receive side (parent platforms), in addition to the platform rules:
+- Include `hmacSecret` in `BrantaClientOptions`.
+- Pass per-call `BrantaClientOptions` to scope requests to the correct child platform's API key.
+
+# Quick Start
+
+## Setup
+
+All integration types share the same setup pattern. Create a `BrantaService` by composing `BrantaClient` and `AesEncryptionService`:
 
 ```dart
+import 'package:branta/branta.dart';
 import 'package:http/http.dart' as http;
-import 'package:branta/branta.dart' as v2;
 
-final client = v2.BrantaClient(
-    httpClient: http.Client(),
-    config: v2.BrantaConfig.production(),
+final options = BrantaClientOptions(
+  baseUrl: BrantaServerBaseUrl.staging, // use .production in production only
+  privacy: PrivacyMode.strict,
 );
 
-// Lookup by address
-await client.getPaymentsAsync('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa');
+final brantaClient = BrantaClient(
+  httpClient: http.Client(),
+  defaultOptions: options,
+);
 
-// Lookup by QR code scan — handles bitcoin:, lightning:, Branta verify URLs, and ZK verify URLs
-await client.getPaymentsByQRCodeAsync(qrText);
+final service = BrantaService(
+  client: brantaClient,
+  aesEncryption: AesEncryptionService(),
+  defaultOptions: options,
+);
 ```
 
-## For Platforms
+Dispose `brantaClient` when it is no longer needed.
 
-Platforms require an API key to submit payment requests.
+## For Wallets (Send Side)
+
+Wallets verify destinations before the user sends funds. Two flows are supported:
+
+- **QR scan** (preferred): call `getPaymentsByQrCodeAsync` with the raw QR text. Handles both on-chain ZK (`branta_id`/`branta_secret`) and self-encrypted destinations (bolt11, ark_address).
+- **Copy/paste**: call `getPaymentsAsync` with the pasted text. Plain-text on-chain addresses return empty in strict mode — they must be ZK-encoded.
+
+Always catch errors and show nothing on not-found.
 
 ```dart
+import 'package:branta/branta.dart';
 import 'package:http/http.dart' as http;
-import 'package:branta/branta.dart' as v2;
 
-final client = v2.BrantaClient(
-    httpClient: http.Client(),
-    config: v2.BrantaConfig.production(apiKey: '<api-key>'),
+final options = BrantaClientOptions(
+  baseUrl: BrantaServerBaseUrl.staging,
+  privacy: PrivacyMode.strict,
+);
+final brantaClient = BrantaClient(httpClient: http.Client(), defaultOptions: options);
+final service = BrantaService(
+  client: brantaClient,
+  aesEncryption: AesEncryptionService(),
+  defaultOptions: options,
 );
 
-final payment = v2.PaymentBuilder()
-    .setDescription('Test Description')
+Future<void> lookup(String input, bool isQrCode) async {
+  try {
+    final result = isQrCode
+        ? await service.getPaymentsByQrCodeAsync(input)
+        : await service.getPaymentsAsync(input);
+
+    if (result.payments.isEmpty) {
+      // Not found — show nothing. The address may simply not exist in Branta.
+      return;
+    }
+
+    // Render result.payments and result.verifyUrl
+  } catch (_) {
+    // Swallow errors — never surface a "not found" or lookup failure to the user.
+  }
+}
+```
+
+## For Platforms (Receive Side)
+
+Platforms post payments to Branta so wallets can verify them. Include your API key and always call `.setZk()` on each destination.
+
+```dart
+import 'package:branta/branta.dart';
+import 'package:http/http.dart' as http;
+
+final options = BrantaClientOptions(
+  baseUrl: BrantaServerBaseUrl.staging,
+  defaultApiKey: '<api-key>',
+  privacy: PrivacyMode.strict,
+);
+final brantaClient = BrantaClient(httpClient: http.Client(), defaultOptions: options);
+final service = BrantaService(
+  client: brantaClient,
+  aesEncryption: AesEncryptionService(),
+  defaultOptions: options,
+);
+
+final payment = PaymentBuilder()
+    .setDescription('Order #1234')
     .addDestination('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa')
+    .setZk()
     .setTtl(600)
     .build();
 
-await client.addPaymentAsync(payment);
+final result = await service.addPaymentAsync(payment);
+// Store result.secret alongside the invoice.
 ```
 
-## For Parent Platforms
+## For Parent Platforms (Receive Side)
 
-Parent platforms sign outbound payment requests with an HMAC secret so Branta can verify the request originated from your server.
+Parent platforms sign requests with HMAC in addition to the API key. Pass per-call `BrantaClientOptions` to scope requests to each child platform.
 
 ```dart
+import 'package:branta/branta.dart';
 import 'package:http/http.dart' as http;
-import 'package:branta/branta.dart' as v2;
 
-final client = v2.BrantaClient(
-    httpClient: http.Client(),
-    config: v2.BrantaConfig.production(
-        apiKey: '<api-key>',
-        hmacSecret: '<hmac-secret>',
-    ),
+final options = BrantaClientOptions(
+  baseUrl: BrantaServerBaseUrl.staging,
+  defaultApiKey: '<api-key>',
+  hmacSecret: '<hmac-secret>',
+  privacy: PrivacyMode.strict,
+);
+final brantaClient = BrantaClient(httpClient: http.Client(), defaultOptions: options);
+final service = BrantaService(
+  client: brantaClient,
+  aesEncryption: AesEncryptionService(),
+  defaultOptions: options,
 );
 
-final payment = v2.PaymentBuilder()
+final payment = PaymentBuilder()
+    .setDescription('Order #1234')
     .addDestination('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa')
+    .setZk()
+    .setTtl(600)
     .build();
 
-// X-HMAC-Signature and X-HMAC-Timestamp headers are added automatically
-await client.addPaymentAsync(payment);
+final result = await service.addPaymentAsync(payment);
 ```
 
-## Publishing
+# Privacy
+
+`PrivacyMode` controls whether plain-text on-chain lookups are allowed.
+
+| Value | Behavior |
+|-------|----------|
+| `PrivacyMode.strict` | Only ZK (zero-knowledge / encrypted) lookups are permitted. `getPaymentsAsync` throws `BrantaPaymentException` for plain addresses; `getPaymentsByQrCodeAsync` returns an empty list. `addPaymentAsync` requires all destinations to have `isZk = true`. |
+| `PrivacyMode.loose` | Both plain and ZK lookups are allowed. No restrictions enforced. |
+
+# IBrantaService
+
+The primary service interface. Always use `BrantaService` (which implements `IBrantaService`) — never call `BrantaClient` directly.
+
+```dart
+Future<PaymentsResult> getPaymentsByQrCodeAsync(String qrText); // preferred for wallets
+Future<PaymentsResult> getPaymentsAsync(String destinationValue, {String? destinationEncryptionKey});
+Future<AddPaymentResult> addPaymentAsync(Payment payment);
+Future<bool> isApiKeyValidAsync();
 ```
+
+`PaymentsResult` contains the list of matching `payments` and the `verifyUrl` to display — `verifyUrl` is always returned, even when `payments` is empty.
+
+# Publishing
+
+```bash
 dart pub login
-```
-
-```
 dart pub bump patch
-```
-
-```
 dart pub publish
 ```
 
-## Configuration
+# Responsible Disclosure
 
-`BrantaConfig` lets you target different environments:
-
-```dart
-// Production (https://branta.pro)
-v2.BrantaConfig.production(apiKey: 'your-api-key')
-
-// Development (http://localhost:3000)
-v2.BrantaConfig.development(apiKey: 'your-api-key')
-
-// Custom (staging, self-hosted, etc.)
-v2.BrantaConfig(baseUrl: 'https://staging.example.com', apiKey: 'your-api-key')
-
-// With HMAC signing (parent platform)
-v2.BrantaConfig.production(apiKey: 'your-api-key', hmacSecret: 'your-hmac-secret')
-
-// From environment variables (BRANTA_API_KEY, BRANTA_HMAC_SECRET)
-v2.BrantaConfig.fromEnvironment(baseUrl: 'https://branta.pro')
-```
-
-## Feature Support
-
- - [X] Per Environment configuration
- - [X] V2 Get Payment by address
- - [X] V2 Get Payment by QR Code
- - [X] V2 Get decrypted Zero Knowledge by address and secret
- - [X] V2 Add Payment
- - [X] V2 Payment by Parent Platform with HMAC
- - [X] V2 Add Zero Knowledge Payment with secret
- - [X] V2 Check API key valid
+Found critical bugs/vulnerabilities? Please email them to support@branta.pro. Thanks!
