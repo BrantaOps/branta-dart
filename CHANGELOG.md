@@ -1,3 +1,7 @@
+## 3.1.1
+
+- Sync README with sibling SDKs
+
 ## 3.1.0
 
 - Complete rewrite to achieve feature parity with `branta-dotnet` and `branta-js` v3.1.0
