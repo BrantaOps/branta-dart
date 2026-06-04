@@ -47,6 +47,11 @@ class QRParser {
         destinations.add(QrDestination(arkValue, _detectPlainTextType(arkValue)));
       }
 
+      final silentPaymentValue = queryParams['silent_payment'];
+      if (silentPaymentValue != null) {
+        destinations.add(QrDestination(silentPaymentValue, _detectPlainTextType(silentPaymentValue)));
+      }
+
       return;
     }
 
@@ -86,6 +91,7 @@ class QRParser {
     if (value.toLowerCase().startsWith('lno')) return DestinationType.bolt12;
     if (value.toLowerCase().startsWith('lnurl')) return DestinationType.lnUrl;
     if (value.isArk()) return DestinationType.arkAddress;
+    if (value.isSilentPayment()) return DestinationType.silentPayment;
     if (_isEthereumAddress(value)) return DestinationType.tetherAddress;
     if (_isTronAddress(value)) return DestinationType.tetherAddress;
     if (_isLnAddress(value)) return DestinationType.lnAddress;
