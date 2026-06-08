@@ -326,12 +326,34 @@ void main() {
       expect('bc1qabc'.isArk(), isFalse);
     });
 
+    test('isSilentPayment returns true for sp1 prefix', () {
+      expect('sp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw'.isSilentPayment(), isTrue);
+    });
+
+    test('isSilentPayment returns true for tsp1 prefix', () {
+      expect('tsp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw'.isSilentPayment(), isTrue);
+    });
+
+    test('isSilentPayment is case-insensitive', () {
+      expect('SP1QQWL5P9JHZ'.isSilentPayment(), isTrue);
+    });
+
+    test('isSilentPayment returns false for non-sp values', () {
+      expect('bc1qabc'.isSilentPayment(), isFalse);
+      expect('ark1qqjqtest'.isSilentPayment(), isFalse);
+    });
+
     test('getHashZkType returns bolt11 for bolt11 invoice', () {
       expect(_bolt11Invoice.getHashZkType(), equals(DestinationType.bolt11));
     });
 
     test('getHashZkType returns arkAddress for ark address', () {
       expect(_arkAddress.getHashZkType(), equals(DestinationType.arkAddress));
+    });
+
+    test('getHashZkType returns silentPayment for silent payment address', () {
+      expect('sp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw'.getHashZkType(),
+          equals(DestinationType.silentPayment));
     });
 
     test('getHashZkType returns null for bitcoin address', () {
@@ -471,6 +493,20 @@ void main() {
       expect(result.destinationType, equals(DestinationType.arkAddress));
     });
 
+    test('silent payment address sets silentPayment type', () {
+      final result = QRParser('sp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw');
+
+      expect(result.destination, equals('sp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw'));
+      expect(result.destinationType, equals(DestinationType.silentPayment));
+    });
+
+    test('testnet silent payment address sets silentPayment type', () {
+      final result = QRParser('tsp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw');
+
+      expect(result.destination, equals('tsp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw'));
+      expect(result.destinationType, equals(DestinationType.silentPayment));
+    });
+
     test('unrecognized text sets null type', () {
       final result = QRParser('not-any-known-format');
 
@@ -511,6 +547,17 @@ void main() {
       expect(result.destinations[2].value, equals('ark100testaddress'));
       expect(result.destinations[2].type, equals(DestinationType.arkAddress));
       expect(result.isOnChainZk(), isFalse);
+    });
+
+    test('bitcoin URI with silent_payment param adds silentPayment destination', () {
+      final result = QRParser(
+          'bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?silent_payment=sp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw');
+
+      expect(result.destinations.length, equals(2));
+      expect(result.destination, equals('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'));
+      expect(result.destinationType, equals(DestinationType.bitcoinAddress));
+      expect(result.destinations[1].value, equals('sp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw'));
+      expect(result.destinations[1].type, equals(DestinationType.silentPayment));
     });
   });
 
@@ -599,6 +646,7 @@ void main() {
       (DestinationType.tetherAddress, 'tether_address'),
       (DestinationType.lnAddress, 'ln_address'),
       (DestinationType.arkAddress, 'ark_address'),
+      (DestinationType.silentPayment, 'silent_payment'),
     ]) {
       test('destinationType $type serializes to "$expected"', () {
         final dest = Destination(value: 'addr', type: type);

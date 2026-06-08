@@ -12,9 +12,15 @@ extension StringBrantaExtensions on String {
 
   bool isArk() => toLowerCase().startsWith('ark1');
 
+  bool isSilentPayment() {
+    final lower = toLowerCase();
+    return lower.startsWith('sp1') || lower.startsWith('tsp1');
+  }
+
   DestinationType? getHashZkType() {
     if (isBolt11()) return DestinationType.bolt11;
     if (isArk()) return DestinationType.arkAddress;
+    if (isSilentPayment()) return DestinationType.silentPayment;
     return null;
   }
 

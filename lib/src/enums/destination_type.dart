@@ -5,7 +5,8 @@ enum DestinationType {
   lnUrl('ln_url'),
   tetherAddress('tether_address'),
   lnAddress('ln_address'),
-  arkAddress('ark_address');
+  arkAddress('ark_address'),
+  silentPayment('silent_payment');
 
   const DestinationType(this.jsonValue);
   final String jsonValue;
