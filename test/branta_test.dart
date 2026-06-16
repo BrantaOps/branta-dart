@@ -157,6 +157,18 @@ class MockSecretGenerator implements ISecretGenerator {
   bool get deterministicNonce => false;
 }
 
+class MockSequentialSecretGenerator implements ISecretGenerator {
+  final List<String> _values;
+  int _index = 0;
+  MockSequentialSecretGenerator(this._values);
+
+  @override
+  String generate() => _values[_index++];
+
+  @override
+  bool get deterministicNonce => false;
+}
+
 // ---------------------------------------------------------------------------
 // Test constants
 // ---------------------------------------------------------------------------
@@ -1370,6 +1382,245 @@ void main() {
     test('forwards options to client', () async {
       await service.isApiKeyValidAsync(options: _looseOptions);
       expect(client.lastIsApiKeyValidOptions, equals(_looseOptions));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // BrantaService — Metadata Encryption (DEK Envelope)
+  // -------------------------------------------------------------------------
+  group('BrantaService — metadata encryption (DEK envelope)', () {
+    const dek = 'test-dek';
+    const encryptedDek = 'encrypted-dek-value';
+    const metadata = '{"email":"alice@example.com"}';
+    const encryptedMetadata = 'encrypted-metadata-value';
+
+    late MockBrantaClient client;
+    late MockAesEncryption aes;
+
+    setUp(() {
+      client = MockBrantaClient();
+      aes = MockAesEncryption();
+    });
+
+    // addPayment
+
+    test('addPaymentAsync_withMetadataAndZkBitcoinDestination_encryptsMetadataWithDekAndSetsDek', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress, type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
+      payment.metadata = metadata;
+      final zkId = payment.destinations.first.zkId!;
+
+      final responsePayment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress, type: DestinationType.bitcoinAddress)
+          .build();
+      responsePayment.destinations.first.isZk = true;
+      responsePayment.destinations.first.zkId = zkId;
+      client.setupPostPayment(responsePayment);
+
+      aes.setupEncrypt(metadata, dek, encryptedMetadata);
+      aes.setupEncrypt(_bitcoinAddress, _secret, _encryptedBitcoinAddress);
+      aes.setupEncrypt(dek, _secret, encryptedDek);
+
+      final service = BrantaService(
+        client: client,
+        aesEncryption: aes,
+        defaultOptions: _looseOptions,
+        secretGenerator: MockSequentialSecretGenerator([dek, _secret]),
+      );
+
+      await service.addPaymentAsync(payment);
+
+      expect(payment.metadata, equals(encryptedMetadata));
+      expect(payment.destinations.first.encryptedDek, equals(encryptedDek));
+      expect(aes.countEncryptCalls(metadata, dek), equals(1));
+      expect(aes.countEncryptCalls(dek, _secret), equals(1));
+    });
+
+    test('addPaymentAsync_withMetadataAndNoZkDestination_leavesMetadataPlain', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress, type: DestinationType.bitcoinAddress)
+          .build();
+      payment.metadata = metadata;
+      client.setupPostPayment(_plainBitcoinPayment);
+
+      final service = _makeService(client, aes);
+      await service.addPaymentAsync(payment);
+
+      expect(payment.metadata, equals(metadata));
+      expect(aes.encryptCalls, isEmpty);
+    });
+
+    test('addPaymentAsync_withZkDestinationAndNoMetadata_doesNotGenerateDek', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress, type: DestinationType.bitcoinAddress)
+          .setZk()
+          .build();
+      final zkId = payment.destinations.first.zkId!;
+
+      final responsePayment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress, type: DestinationType.bitcoinAddress)
+          .build();
+      responsePayment.destinations.first.isZk = true;
+      responsePayment.destinations.first.zkId = zkId;
+      client.setupPostPayment(responsePayment);
+
+      aes.setupEncrypt(_bitcoinAddress, _secret, _encryptedBitcoinAddress);
+      final service = _makeService(client, aes);
+      await service.addPaymentAsync(payment);
+
+      // Only one encrypt call: the address. No DEK encrypt.
+      expect(aes.encryptCalls.length, equals(1));
+      expect(payment.destinations.first.encryptedDek, isNull);
+    });
+
+    // decryptDestinations
+
+    test('getPaymentsAsync_zkBitcoinWithEncryptedDek_decryptsMetadataViaDek', () async {
+      final payment = Payment(
+        destinations: [
+          Destination(
+            value: _encryptedBitcoinAddress,
+            isZk: true,
+            type: DestinationType.bitcoinAddress,
+            encryptedDek: encryptedDek,
+          ),
+        ],
+        metadata: encryptedMetadata,
+      );
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+      aes.setupDecryptResult(_encryptedBitcoinAddress, _secret, _bitcoinAddress);
+      aes.setupDecryptResult(encryptedDek, _secret, dek);
+      aes.setupDecryptResult(encryptedMetadata, dek, metadata);
+
+      final service = _makeService(client, aes);
+      final result = await service.getPaymentsAsync(_encryptedBitcoinAddress, destinationEncryptionKey: _secret);
+
+      expect(result.payments.first.metadata, equals(metadata));
+      expect(result.payments.first.isMetadataDecrypted, isTrue);
+    });
+
+    test('getPaymentsAsync_zkBolt11WithEncryptedDek_decryptsMetadataViaHashKey', () async {
+      final payment = Payment(
+        destinations: [
+          Destination(
+            value: _encryptedBolt11,
+            isZk: true,
+            type: DestinationType.bolt11,
+            encryptedDek: encryptedDek,
+          ),
+        ],
+        metadata: encryptedMetadata,
+      );
+      client.setupGetPayments(_encryptedBolt11, [payment]);
+      aes.setupEncrypt(_bolt11Invoice, _bolt11Hash, _encryptedBolt11, deterministicNonce: true);
+      aes.setupDecryptResult(_encryptedBolt11, _bolt11Hash, _decryptedBolt11);
+      aes.setupDecryptResult(encryptedDek, _bolt11Hash, dek);
+      aes.setupDecryptResult(encryptedMetadata, dek, metadata);
+
+      final service = _makeService(client, aes);
+      final result = await service.getPaymentsAsync(_bolt11Invoice);
+
+      expect(result.payments.first.metadata, equals(metadata));
+      expect(result.payments.first.isMetadataDecrypted, isTrue);
+    });
+
+    test('getPaymentsAsync_wrongKey_encryptedDekDecryptFails_leavesMetadataEncrypted', () async {
+      final payment = Payment(
+        destinations: [
+          Destination(
+            value: _encryptedBitcoinAddress,
+            isZk: true,
+            type: DestinationType.bitcoinAddress,
+            encryptedDek: encryptedDek,
+          ),
+        ],
+        metadata: encryptedMetadata,
+      );
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+      aes.setupDecryptResult(_encryptedBitcoinAddress, _secret, _bitcoinAddress);
+      aes.setupDecryptThrows(encryptedDek, _secret, Exception('Decryption failed: auth tag mismatch'));
+
+      final service = _makeService(client, aes);
+      final result = await service.getPaymentsAsync(_encryptedBitcoinAddress, destinationEncryptionKey: _secret);
+
+      expect(result.payments.first.metadata, equals(encryptedMetadata));
+      expect(result.payments.first.isMetadataDecrypted, isFalse);
+    });
+
+    test('getPaymentsAsync_twoZkDestinationsWithEncryptedDek_decryptsMetadataOnce', () async {
+      const encryptedBitcoinAddress2 = 'encrypted-bitcoin-address-2';
+      final payment = Payment(
+        destinations: [
+          Destination(
+            value: _encryptedBitcoinAddress,
+            isZk: true,
+            type: DestinationType.bitcoinAddress,
+            encryptedDek: encryptedDek,
+          ),
+          Destination(
+            value: encryptedBitcoinAddress2,
+            isZk: true,
+            type: DestinationType.bitcoinAddress,
+            encryptedDek: encryptedDek,
+          ),
+        ],
+        metadata: encryptedMetadata,
+      );
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+      aes.setupDecryptResult(_encryptedBitcoinAddress, _secret, _bitcoinAddress);
+      aes.setupDecryptResult(encryptedBitcoinAddress2, _secret, _bitcoinAddress);
+      aes.setupDecryptResult(encryptedDek, _secret, dek);
+      aes.setupDecryptResult(encryptedMetadata, dek, metadata);
+
+      final service = _makeService(client, aes);
+      final result = await service.getPaymentsAsync(_encryptedBitcoinAddress, destinationEncryptionKey: _secret);
+
+      expect(result.payments.first.metadata, equals(metadata));
+      expect(aes.countDecryptCalls(encryptedMetadata, dek), equals(1));
+    });
+
+    test('getPaymentsAsync_noEncryptedDek_doesNotAttemptMetadataDecrypt', () async {
+      final payment = Payment(
+        destinations: [
+          Destination(
+            value: _encryptedBitcoinAddress,
+            isZk: true,
+            type: DestinationType.bitcoinAddress,
+          ),
+        ],
+        metadata: encryptedMetadata,
+      );
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+      aes.setupDecryptResult(_encryptedBitcoinAddress, _secret, _bitcoinAddress);
+
+      final service = _makeService(client, aes);
+      final result = await service.getPaymentsAsync(_encryptedBitcoinAddress, destinationEncryptionKey: _secret);
+
+      expect(result.payments.first.metadata, equals(encryptedMetadata));
+      expect(aes.countDecryptCalls(encryptedDek, _secret), equals(0));
+    });
+
+    test('getPaymentsAsync_noMetadata_doesNotAttemptDekDecrypt', () async {
+      final payment = Payment(
+        destinations: [
+          Destination(
+            value: _encryptedBitcoinAddress,
+            isZk: true,
+            type: DestinationType.bitcoinAddress,
+            encryptedDek: encryptedDek,
+          ),
+        ],
+      );
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+      aes.setupDecryptResult(_encryptedBitcoinAddress, _secret, _bitcoinAddress);
+
+      final service = _makeService(client, aes);
+      final result = await service.getPaymentsAsync(_encryptedBitcoinAddress, destinationEncryptionKey: _secret);
+
+      expect(result.payments.first.metadata, isNull);
+      expect(aes.countDecryptCalls(encryptedDek, _secret), equals(0));
     });
   });
 }
