@@ -69,9 +69,9 @@ class BrantaService implements IBrantaService {
 
     final keys = <String, String>{};
     for (final payment in payments) {
-      await _decryptDestinations(payment.destinations, lookupValue, encryptionKey, null, keys);
+      await _decryptDestinations(payment, lookupValue, encryptionKey, null, keys);
       for (final value in additionalHashValues) {
-        await _decryptHashZkDestinations(payment.destinations, value, keys);
+        await _decryptHashZkDestinations(payment, value, keys);
       }
     }
 
@@ -82,7 +82,7 @@ class BrantaService implements IBrantaService {
   }
 
   Future<void> _decryptHashZkDestinations(
-    List<Destination> destinations,
+    Payment payment,
     String plainValue,
     Map<String, String> keys,
   ) async {
@@ -90,13 +90,14 @@ class BrantaService implements IBrantaService {
     if (hashZkType == null) return;
 
     final key = plainValue.toNormalizedHash();
-    for (final destination in destinations) {
+    for (final destination in payment.destinations) {
       if (!destination.isZk || destination.type != hashZkType) continue;
       try {
         destination.value = await _aesEncryption.decrypt(destination.value, key);
         destination.isEncrypted = false;
         final zkId = destination.zkId;
         if (zkId != null) keys.putIfAbsent(zkId, () => key);
+        await _tryDecryptMetadata(payment, destination, key);
       } catch (_) {
         // Key didn't match this destination — leave it encrypted.
       }
@@ -136,7 +137,7 @@ class BrantaService implements IBrantaService {
 
     final keys = <String, String>{};
     for (final payment in payments) {
-      await _decryptDestinations(payment.destinations, normalizedDestination, destinationEncryptionKey, hashZkType, keys);
+      await _decryptDestinations(payment, normalizedDestination, destinationEncryptionKey, hashZkType, keys);
     }
 
     return PaymentsResult(
@@ -146,13 +147,13 @@ class BrantaService implements IBrantaService {
   }
 
   Future<void> _decryptDestinations(
-    List<Destination> destinations,
+    Payment payment,
     String destinationValue,
     String? encryptionKey,
     DestinationType? hashZkType,
     Map<String, String> keys,
   ) async {
-    for (final destination in destinations) {
+    for (final destination in payment.destinations) {
       destination.isEncrypted = destination.isZk;
       if (!destination.isZk) continue;
 
@@ -163,6 +164,7 @@ class BrantaService implements IBrantaService {
           destination.isEncrypted = false;
           final zkId = destination.zkId;
           if (zkId != null) keys.putIfAbsent(zkId, () => encryptionKey);
+          await _tryDecryptMetadata(payment, destination, encryptionKey);
         } catch (_) {
           // Key didn't match — leave it encrypted.
         }
@@ -173,10 +175,27 @@ class BrantaService implements IBrantaService {
           destination.isEncrypted = false;
           final zkId = destination.zkId;
           if (zkId != null) keys.putIfAbsent(zkId, () => key);
+          await _tryDecryptMetadata(payment, destination, key);
         } catch (_) {
           // Key didn't match — leave it encrypted.
         }
       }
+    }
+  }
+
+  Future<void> _tryDecryptMetadata(
+    Payment payment,
+    Destination destination,
+    String keyUsed,
+  ) async {
+    final encryptedDek = destination.encryptedDek;
+    if (encryptedDek == null || payment.metadata == null || payment.isMetadataDecrypted) return;
+    try {
+      final dek = await _aesEncryption.decrypt(encryptedDek, keyUsed);
+      payment.metadata = await _aesEncryption.decrypt(payment.metadata!, dek);
+      payment.isMetadataDecrypted = true;
+    } catch (_) {
+      // DEK decryption failed — leave metadata as-is.
     }
   }
 
@@ -187,6 +206,12 @@ class BrantaService implements IBrantaService {
       throw BrantaPaymentException(
         'PrivacyMode.Strict requires all destinations to be ZK; one or more destinations have isZk = false.',
       );
+    }
+
+    String? dek;
+    if (payment.metadata != null && payment.destinations.any((d) => d.isZk)) {
+      dek = _secretGenerator.generate();
+      payment.metadata = await _aesEncryption.encrypt(payment.metadata!, dek, deterministicNonce: false);
     }
 
     final secret = _secretGenerator.generate();
@@ -202,6 +227,9 @@ class BrantaService implements IBrantaService {
           deterministicNonce: _secretGenerator.deterministicNonce,
         );
         encryptedToKey[destination.value] = secret;
+        if (dek != null) {
+          destination.encryptedDek = await _aesEncryption.encrypt(dek, secret, deterministicNonce: false);
+        }
       } else {
         final hashZkType = destination.value.getHashZkType();
         if (hashZkType == null) {
@@ -213,6 +241,9 @@ class BrantaService implements IBrantaService {
         final key = normalizedValue.toNormalizedHash();
         destination.value = await _aesEncryption.encrypt(normalizedValue, key, deterministicNonce: true);
         encryptedToKey[destination.value] = key;
+        if (dek != null) {
+          destination.encryptedDek = await _aesEncryption.encrypt(dek, key, deterministicNonce: false);
+        }
       }
     }
 

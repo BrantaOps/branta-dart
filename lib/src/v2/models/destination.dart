@@ -11,6 +11,7 @@ class Destination {
 
   DestinationType? type;
   String? zkId;
+  String? encryptedDek;
 
   Destination({
     required this.value,
@@ -19,6 +20,7 @@ class Destination {
     this.isEncrypted = false,
     this.type,
     this.zkId,
+    this.encryptedDek,
   });
 
   factory Destination.fromJson(Map<String, dynamic> json) => Destination(
@@ -27,6 +29,7 @@ class Destination {
         isZk: json['zk'] as bool? ?? false,
         type: DestinationType.fromJson(json['type'] as String?),
         zkId: json['zk_id'] as String?,
+        encryptedDek: json['encrypted_dek'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -35,5 +38,6 @@ class Destination {
         'zk': isZk,
         if (type != null) 'type': type!.jsonValue,
         if (zkId != null) 'zk_id': zkId,
+        if (encryptedDek != null) 'encrypted_dek': encryptedDek,
       };
 }

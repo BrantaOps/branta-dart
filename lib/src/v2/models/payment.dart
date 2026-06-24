@@ -13,6 +13,10 @@ class Payment {
   Platform? parentPlatform;
   String? btcPayServerPluginVersion;
 
+  /// Runtime-only flag set by [BrantaService] after metadata decryption.
+  /// Not serialized to/from JSON.
+  bool isMetadataDecrypted = false;
+
   Payment({
     this.description,
     required this.destinations,
