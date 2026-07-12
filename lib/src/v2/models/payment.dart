@@ -11,6 +11,7 @@ class Payment {
   String? platformLogoUrl;
   String? platformLogoLightUrl;
   Platform? parentPlatform;
+  Platform? childPlatform;
   String? btcPayServerPluginVersion;
 
   /// Runtime-only flag set by [BrantaService] after metadata decryption.
@@ -27,6 +28,7 @@ class Payment {
     this.platformLogoUrl,
     this.platformLogoLightUrl,
     this.parentPlatform,
+    this.childPlatform,
     this.btcPayServerPluginVersion,
   });
 
@@ -67,6 +69,7 @@ class Payment {
         if (platformLogoLightUrl != null)
           'platform_logo_light_url': platformLogoLightUrl,
         if (parentPlatform != null) 'parent_platform': parentPlatform!.toJson(),
+        if (childPlatform != null) 'child_platform': childPlatform!.toJson(),
         if (btcPayServerPluginVersion != null)
           'btc_pay_server_plugin_version': btcPayServerPluginVersion,
       };

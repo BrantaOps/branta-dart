@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../enums/destination_type.dart';
 import '../models/destination.dart';
 import '../models/payment.dart';
+import '../models/platform.dart';
 
 class PaymentBuilder {
   final Payment _payment = Payment(destinations: []);
@@ -47,6 +48,11 @@ class PaymentBuilder {
 
   PaymentBuilder setPlatformLogoUrl(String platformLogoUrl) {
     _payment.platformLogoUrl = platformLogoUrl;
+    return this;
+  }
+
+  PaymentBuilder setChildPlatform(String name, {String? logoUrl, String? logoLightUrl}) {
+    _payment.childPlatform = Platform(name: name, logoUrl: logoUrl, logoLightUrl: logoLightUrl);
     return this;
   }
 

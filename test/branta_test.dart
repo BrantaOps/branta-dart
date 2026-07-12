@@ -670,6 +670,68 @@ void main() {
       final dest = Destination(value: 'addr');
       expect(dest.toJson().containsKey('type'), isFalse);
     });
+
+    test('setChildPlatform sets name', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress)
+          .setChildPlatform('Acme')
+          .build();
+
+      expect(payment.childPlatform!.name, equals('Acme'));
+    });
+
+    test('setChildPlatform optional URLs default to null', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress)
+          .setChildPlatform('Acme')
+          .build();
+
+      expect(payment.childPlatform!.logoUrl, isNull);
+      expect(payment.childPlatform!.logoLightUrl, isNull);
+    });
+
+    test('setChildPlatform with URLs sets urls', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress)
+          .setChildPlatform('Acme',
+              logoUrl: 'https://example.com/logo.png',
+              logoLightUrl: 'https://example.com/logo-light.png')
+          .build();
+
+      expect(payment.childPlatform!.logoUrl, equals('https://example.com/logo.png'));
+      expect(payment.childPlatform!.logoLightUrl, equals('https://example.com/logo-light.png'));
+    });
+
+    test('setChildPlatform returns builder', () {
+      final builder = PaymentBuilder().addDestination(_bitcoinAddress);
+      final result = builder.setChildPlatform('Acme');
+
+      expect(result, same(builder));
+    });
+
+    test('setChildPlatform serializes to toJson', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress)
+          .setChildPlatform('Acme', logoUrl: 'https://example.com/logo.png')
+          .build();
+
+      final json = payment.toJson();
+      final cp = json['child_platform'] as Map<String, dynamic>;
+
+      expect(cp['name'], equals('Acme'));
+      expect(cp['logo_url'], equals('https://example.com/logo.png'));
+      expect(cp.containsKey('logo_light_url'), isFalse);
+    });
+
+    test('no childPlatform omitted from toJson', () {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress)
+          .build();
+
+      final json = payment.toJson();
+
+      expect(json.containsKey('child_platform'), isFalse);
+    });
   });
 
   // -------------------------------------------------------------------------
