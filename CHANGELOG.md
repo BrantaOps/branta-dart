@@ -1,3 +1,9 @@
+## 3.2.0
+
+- Added `silentPayment` (`sp1`/`tsp1`) to `DestinationType`, with hash-based ZK support and QR parsing (`silent_payment` param, plain-text detection)
+- Added encrypted metadata support: `addPaymentAsync` encrypts `Payment.metadata` with a per-payment DEK that is itself encrypted per-destination (`Destination.encryptedDek`); metadata is decrypted automatically alongside destinations on retrieval
+- Added `Payment.childPlatform` and `PaymentBuilder.setChildPlatform()` for the child platform flow, mirroring the existing `parentPlatform` support
+
 ## 3.1.1
 
 - Sync README with sibling SDKs
