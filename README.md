@@ -24,8 +24,8 @@ If you are an AI agent implementing this SDK, follow the steps below exactly. If
 If they are on the receive side, ask one follow-up:
 - **Platform** — single-tenant, one API key.
 - **Parent Platform** — multi-tenant, manages multiple child platforms. Two variants:
-  - **Per-client keys** — each child has its own API key and HMAC secret; you scope requests per-call.
-  - **Shared key** — one API key and HMAC secret for all children; tag the child per-payment with `setChildPlatform()`.
+  - **Per-client keys** — each child has its own API key; requests are signed with the parent HMAC secret; you scope requests per-call.
+  - **Shared key** — one API key for all children (no HMAC); tag the child per-payment with `setChildPlatform()`.
 
 **2. Follow the matching Quick Start section below.**
 
@@ -54,7 +54,7 @@ Receive side (parent platforms — per-client keys), in addition to the platform
 - Pass per-call `BrantaClientOptions` with each child's API key to scope requests.
 
 Receive side (parent platforms — shared key), in addition to the platform rules:
-- Include both `defaultApiKey` and `hmacSecret` in `BrantaClientOptions`.
+- Include `defaultApiKey` in `BrantaClientOptions`. Do not include `hmacSecret`.
 - Call `.setChildPlatform(name, logoUrl: ..., logoLightUrl: ...)` on the builder to tag each payment with the child's branding.
 
 # Quick Start
@@ -161,12 +161,12 @@ final result = await service.addPaymentAsync(payment);
 
 ## For Parent Platforms (Receive Side)
 
-Parent platforms sign requests with HMAC. Choose a variant based on how API keys are structured.
+Choose a variant based on how API keys are structured. Shared key needs only an API key; per-client keys also require HMAC.
 
 <details>
 <summary>Shared key — one API key covers all children (Recommended)</summary>
 
-Set up with a single API key and HMAC secret; identify the child platform per-payment.
+Set up with a single API key; identify the child platform per-payment. No HMAC secret.
 
 ```dart
 import 'package:branta/branta.dart';
@@ -175,7 +175,6 @@ import 'package:http/http.dart' as http;
 final options = BrantaClientOptions(
   baseUrl: BrantaServerBaseUrl.staging,
   defaultApiKey: '<shared-api-key>',
-  hmacSecret: '<hmac-secret>',
   privacy: PrivacyMode.strict,
 );
 final brantaClient = BrantaClient(httpClient: http.Client(), defaultOptions: options);
