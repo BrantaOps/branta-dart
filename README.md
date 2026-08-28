@@ -128,6 +128,37 @@ Future<void> lookup(String input, bool isQrCode) async {
 }
 ```
 
+### No-QR-Code Flows
+
+When QR scanning is not available, three options exist. Choose one based on how much control you want to give users over privacy:
+
+**Option 1 — Keep Strict mode (no code changes)**
+
+Only self-encrypted destinations (bolt11, ark_address) will return results. Plain-text on-chain address lookups silently return empty. This is the safest default and requires no additional work.
+
+**Option 2 — Opt-in Loose mode (Recommended)**
+
+Add a user-facing setting (e.g. "Enable on-chain address verification"). Only switch to `PrivacyMode.loose` when the user explicitly opts in — this sends on-chain addresses in plain text, so the choice should be theirs.
+
+```dart
+final options = userOptedIn
+    ? BrantaClientOptions(privacy: PrivacyMode.loose)
+    : null;
+
+final result = await service.getPaymentsAsync(input, options: options);
+```
+
+**Option 3 — Always Loose mode**
+
+Configure with `PrivacyMode.loose` globally. All lookups including plain-text on-chain addresses are sent to Branta. Simplest, but gives users no privacy control.
+
+```dart
+final options = BrantaClientOptions(
+  baseUrl: BrantaServerBaseUrl.production,
+  privacy: PrivacyMode.loose,
+);
+```
+
 ## For Platforms (Receive Side)
 
 Platforms post payments to Branta so wallets can verify them. Include your API key and always call `.setZk()` on each destination.
@@ -258,11 +289,9 @@ Future<bool> isApiKeyValidAsync();
 
 # Publishing
 
-```bash
-dart pub login
-dart pub bump patch
-dart pub publish
-```
+ - Update `version` in `pubspec.yaml`
+ - `dart pub login`
+ - `dart pub publish`
 
 # Responsible Disclosure
 
