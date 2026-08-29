@@ -30,6 +30,12 @@ class BrantaService implements IBrantaService {
         _defaultOptions = defaultOptions,
         _secretGenerator = secretGenerator ?? GuidSecretGenerator();
 
+  static bool _addressesMatch(String a, String b) {
+    bool isBech32(String v) => v.toLowerCase().startsWith('bc1');
+    if (isBech32(a) && isBech32(b)) return a.toLowerCase() == b.toLowerCase();
+    return a == b;
+  }
+
   @override
   Future<PaymentsResult> getPaymentsByQrCodeAsync(String qrText, {BrantaClientOptions? options}) async {
     final parser = QRParser(qrText);
@@ -39,10 +45,13 @@ class BrantaService implements IBrantaService {
           .where((d) => d.value.getHashZkType() != null)
           .map((d) => d.value)
           .toList();
+      final onChainDestinations = parser.destinations.where((d) => d.type == DestinationType.bitcoinAddress);
+      final onChainAddress = onChainDestinations.isNotEmpty ? onChainDestinations.first.value : null;
       return _getPaymentsForZkAsync(
         parser.onChainEncryptionText!,
         parser.onChainEncryptionSecret,
         additionalValues,
+        onChainAddress,
         options: options,
       );
     }
@@ -62,14 +71,15 @@ class BrantaService implements IBrantaService {
   Future<PaymentsResult> _getPaymentsForZkAsync(
     String lookupValue,
     String? encryptionKey,
-    List<String> additionalHashValues, {
+    List<String> additionalHashValues,
+    String? expectedOnChainAddress, {
     BrantaClientOptions? options,
   }) async {
     final payments = await _client.getPaymentsAsync(lookupValue, options: options);
 
     final keys = <String, String>{};
     for (final payment in payments) {
-      await _decryptDestinations(payment, lookupValue, encryptionKey, null, keys);
+      await _decryptDestinations(payment, lookupValue, encryptionKey, null, keys, expectedOnChainAddress: expectedOnChainAddress);
       for (final value in additionalHashValues) {
         await _decryptHashZkDestinations(payment, value, keys);
       }
@@ -151,23 +161,35 @@ class BrantaService implements IBrantaService {
     String destinationValue,
     String? encryptionKey,
     DestinationType? hashZkType,
-    Map<String, String> keys,
-  ) async {
+    Map<String, String> keys, {
+    String? expectedOnChainAddress,
+  }) async {
     for (final destination in payment.destinations) {
       destination.isEncrypted = destination.isZk;
       if (!destination.isZk) continue;
 
       if (destination.type == DestinationType.bitcoinAddress) {
         if (encryptionKey == null) continue;
+        String decrypted;
         try {
-          destination.value = await _aesEncryption.decrypt(destination.value, encryptionKey);
-          destination.isEncrypted = false;
-          final zkId = destination.zkId;
-          if (zkId != null) keys.putIfAbsent(zkId, () => encryptionKey);
-          await _tryDecryptMetadata(payment, destination, encryptionKey);
+          decrypted = await _aesEncryption.decrypt(destination.value, encryptionKey);
         } catch (_) {
           // Key didn't match — leave it encrypted.
+          continue;
         }
+
+        if (expectedOnChainAddress != null && !_addressesMatch(decrypted, expectedOnChainAddress)) {
+          throw BrantaPaymentException(
+            'The Bitcoin address in the QR code does not match the address verified by Branta. The QR code may have been tampered with.',
+            BrantaPaymentExceptionReason.tampered,
+          );
+        }
+
+        destination.value = decrypted;
+        destination.isEncrypted = false;
+        final zkId = destination.zkId;
+        if (zkId != null) keys.putIfAbsent(zkId, () => encryptionKey);
+        await _tryDecryptMetadata(payment, destination, encryptionKey);
       } else if (hashZkType != null && destination.type == hashZkType) {
         final key = destinationValue.toNormalizedHash();
         try {

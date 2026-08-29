@@ -889,6 +889,115 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
+  // BrantaService.getPaymentsByQrCodeAsync — address binding
+  // -------------------------------------------------------------------------
+  group('BrantaService.getPaymentsByQrCodeAsync address binding', () {
+    late MockBrantaClient client;
+    late MockAesEncryption aes;
+    late BrantaService service;
+
+    const swappedAddress = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
+    const bech32Address = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+    const encryptedBech32Address = 'encrypted-bech32-address';
+
+    Payment zkBech32Payment() => PaymentBuilder()
+        .addDestination(encryptedBech32Address, type: DestinationType.bitcoinAddress)
+        .setZk()
+        .build();
+
+    setUp(() {
+      client = MockBrantaClient();
+      aes = MockAesEncryption();
+      _setupDefaultMocks(aes);
+      service = _makeService(client, aes);
+    });
+
+    test('swapped address rejects', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$swappedAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
+
+      expect(
+        () => service.getPaymentsByQrCodeAsync(qrText),
+        throwsA(isA<BrantaPaymentException>().having(
+          (e) => e.reason,
+          'reason',
+          BrantaPaymentExceptionReason.tampered,
+        )),
+      );
+    });
+
+    test('matching address does not throw', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments[0].destinations[0].value, equals(_bitcoinAddress));
+    });
+
+    test('uppercase bech32 QR matches lowercase registered address', () async {
+      aes.setupDecryptResult(encryptedBech32Address, _secret, bech32Address);
+      client.setupGetPayments(encryptedBech32Address, [zkBech32Payment()]);
+      final qrText =
+          'bitcoin:${bech32Address.toUpperCase()}?branta_id=$encryptedBech32Address&branta_secret=$_secret';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments[0].destinations[0].value, equals(bech32Address));
+    });
+
+    test('base58 case mismatch rejects', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:${_bitcoinAddress.toLowerCase()}?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
+
+      expect(
+        () => service.getPaymentsByQrCodeAsync(qrText),
+        throwsA(isA<BrantaPaymentException>().having(
+          (e) => e.reason,
+          'reason',
+          BrantaPaymentExceptionReason.tampered,
+        )),
+      );
+    });
+
+    test('lightning QR with ZK params and no plaintext on-chain address decrypts without comparison', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'lightning:$_bolt11Invoice?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments[0].destinations[0].value, equals(_bitcoinAddress));
+    });
+
+    test('combined ZK QR with swapped address rejects', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress, type: DestinationType.bitcoinAddress)
+          .setZk()
+          .addDestination(_encryptedBolt11, type: DestinationType.bolt11)
+          .setZk()
+          .addDestination(_encryptedArkAddress, type: DestinationType.arkAddress)
+          .setZk()
+          .build();
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+      final qrText =
+          'bitcoin:$swappedAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret&lightning=$_bolt11Invoice&ark=$_arkAddress';
+
+      expect(
+        () => service.getPaymentsByQrCodeAsync(qrText),
+        throwsA(isA<BrantaPaymentException>().having(
+          (e) => e.reason,
+          'reason',
+          BrantaPaymentExceptionReason.tampered,
+        )),
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // BrantaService — GetPaymentsAsync
   // -------------------------------------------------------------------------
   group('BrantaService.getPaymentsAsync', () {
