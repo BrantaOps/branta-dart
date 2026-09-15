@@ -112,16 +112,24 @@ class BrantaClient implements IBrantaClient {
     if (baseUri == null) return;
     final baseOrigin = baseUri.origin;
 
-    for (final payment in payments) {
-      final logoUrl = payment.platformLogoUrl;
+    void check(String? logoUrl, String fieldName) {
       if (logoUrl == null || logoUrl.isEmpty) return;
 
       final logoUri = Uri.tryParse(logoUrl);
       if (logoUri == null || logoUri.origin != baseOrigin) {
         throw BrantaPaymentException(
-          'platformLogoUrl domain does not match the configured baseUrl domain',
+          '$fieldName domain does not match the configured baseUrl domain',
         );
       }
+    }
+
+    for (final payment in payments) {
+      check(payment.platformLogoUrl, 'platformLogoUrl');
+      check(payment.platformLogoLightUrl, 'platformLogoLightUrl');
+      check(payment.parentPlatform?.logoUrl, 'parentPlatform.logoUrl');
+      check(payment.parentPlatform?.logoLightUrl, 'parentPlatform.logoLightUrl');
+      check(payment.childPlatform?.logoUrl, 'childPlatform.logoUrl');
+      check(payment.childPlatform?.logoLightUrl, 'childPlatform.logoLightUrl');
     }
   }
 
