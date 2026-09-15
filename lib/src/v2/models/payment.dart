@@ -54,6 +54,9 @@ class Payment {
         parentPlatform: json['parent_platform'] != null
             ? Platform.fromJson(json['parent_platform'] as Map<String, dynamic>)
             : null,
+        childPlatform: json['child_platform'] != null
+            ? Platform.fromJson(json['child_platform'] as Map<String, dynamic>)
+            : null,
         btcPayServerPluginVersion:
             json['btc_pay_server_plugin_version'] as String?,
       );
