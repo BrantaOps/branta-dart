@@ -10,7 +10,10 @@ extension StringBrantaExtensions on String {
         lower.startsWith('lnbcrt');
   }
 
-  bool isArk() => toLowerCase().startsWith('ark1');
+  bool isArk() {
+    final lower = toLowerCase();
+    return lower.startsWith('ark1') || lower.startsWith('tark1');
+  }
 
   bool isSilentPayment() {
     final lower = toLowerCase();

@@ -1,3 +1,7 @@
+## Unreleased
+
+- Added: recognize signet and regtest Ark addresses (`tark1`) as `arkAddress`, alongside mainnet `ark1`. Strict-mode hash-ZK lookup and registration treat them the same way as `ark1`.
+
 ## 3.2.2
 
 - Fixed: a same-origin validation gap: if the first payment in a `getPayments` response had no `platformLogoUrl`, validation silently stopped checking every later payment's logo URLs entirely. Logo-URL checks now run independently per payment, and now also cover `platformLogoLightUrl`, `parentPlatform.logoUrl`/`logoLightUrl`, and `childPlatform.logoUrl`/`logoLightUrl` (previously only `platformLogoUrl` was checked)
