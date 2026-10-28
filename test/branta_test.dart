@@ -334,6 +334,11 @@ void main() {
       expect('ARK1QQJQTEST'.isArk(), isTrue);
     });
 
+    test('isArk returns true for tark1 prefix', () {
+      expect('tark1qqjqtest'.isArk(), isTrue);
+      expect('TARK1QQJQTEST'.isArk(), isTrue);
+    });
+
     test('isArk returns false for non-ark values', () {
       expect('bc1qabc'.isArk(), isFalse);
     });
@@ -361,6 +366,7 @@ void main() {
 
     test('getHashZkType returns arkAddress for ark address', () {
       expect(_arkAddress.getHashZkType(), equals(DestinationType.arkAddress));
+      expect('tark1qqjqtest'.getHashZkType(), equals(DestinationType.arkAddress));
     });
 
     test('getHashZkType returns silentPayment for silent payment address', () {
@@ -502,6 +508,13 @@ void main() {
       final result = QRParser('ark1qqjqtest');
 
       expect(result.destination, equals('ark1qqjqtest'));
+      expect(result.destinationType, equals(DestinationType.arkAddress));
+    });
+
+    test('signet ark address sets arkAddress type', () {
+      final result = QRParser('tark1qqjqtest');
+
+      expect(result.destination, equals('tark1qqjqtest'));
       expect(result.destinationType, equals(DestinationType.arkAddress));
     });
 
