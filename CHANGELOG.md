@@ -1,4 +1,4 @@
-## Unreleased
+## 3.2.3
 
 - Added: recognize signet and regtest Ark addresses (`tark1`) as `arkAddress`, alongside mainnet `ark1`. Strict-mode hash-ZK lookup and registration treat them the same way as `ark1`.
 
