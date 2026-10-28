@@ -22,6 +22,10 @@ BrantaService _makeService(BrantaServerBaseUrl baseUrl, PrivacyMode privacy) {
 }
 
 void main() {
+  final skipLive = io.Platform.environment.containsKey('BRANTA_SKIP_INTEGRATION')
+      ? 'Integration tests skipped (BRANTA_SKIP_INTEGRATION set)'
+      : null;
+
   group('Production', () {
     late BrantaService service;
 
@@ -62,7 +66,7 @@ void main() {
       final result = await service.getPaymentsByQrCodeAsync(notFound);
       expect(result.payments, isEmpty);
     });
-  });
+  }, skip: skipLive);
 
   group('Staging', () {
     late BrantaService service;
@@ -104,7 +108,7 @@ void main() {
       final result = await service.getPaymentsByQrCodeAsync(notFound);
       expect(result.payments, isEmpty);
     });
-  });
+  }, skip: skipLive);
 
   // Production — Strict (plain-text addresses return empty)
   group('Production (strict)', () {
@@ -147,7 +151,7 @@ void main() {
       final result = await service.getPaymentsByQrCodeAsync(notFound);
       expect(result.payments, isEmpty);
     });
-  });
+  }, skip: skipLive);
 
   // Staging — Strict (plain-text addresses return empty)
   group('Staging (strict)', () {
@@ -190,5 +194,5 @@ void main() {
       final result = await service.getPaymentsByQrCodeAsync(notFound);
       expect(result.payments, isEmpty);
     });
-  });
+  }, skip: skipLive);
 }
