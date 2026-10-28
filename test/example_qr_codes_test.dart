@@ -4,6 +4,25 @@ import 'package:branta/branta.dart';
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 
+class _MetricsHttpClient extends http.BaseClient {
+  final http.Client _inner = http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    final token = io.Platform.environment['BRANTA_INTEGRATION_METRICS_TOKEN'];
+    if (token != null && token.isNotEmpty) {
+      request.headers['X-Branta-Integration-Token'] = token;
+    }
+    return _inner.send(request);
+  }
+
+  @override
+  void close() {
+    _inner.close();
+    super.close();
+  }
+}
+
 BrantaService _makeService(BrantaServerBaseUrl baseUrl, PrivacyMode privacy) {
   final apiKey = io.Platform.environment['BRANTA_API_KEY'] ?? '';
   final options = BrantaClientOptions(
@@ -13,7 +32,7 @@ BrantaService _makeService(BrantaServerBaseUrl baseUrl, PrivacyMode privacy) {
   );
   return BrantaService(
     client: BrantaClient(
-      httpClient: http.Client(),
+      httpClient: _MetricsHttpClient(),
       defaultOptions: options,
     ),
     aesEncryption: AesEncryptionService(),
@@ -22,6 +41,10 @@ BrantaService _makeService(BrantaServerBaseUrl baseUrl, PrivacyMode privacy) {
 }
 
 void main() {
+  final skipLive = io.Platform.environment.containsKey('BRANTA_SKIP_INTEGRATION')
+      ? 'Integration tests skipped (BRANTA_SKIP_INTEGRATION set)'
+      : null;
+
   group('Production', () {
     late BrantaService service;
 
@@ -62,7 +85,7 @@ void main() {
       final result = await service.getPaymentsByQrCodeAsync(notFound);
       expect(result.payments, isEmpty);
     });
-  });
+  }, skip: skipLive);
 
   group('Staging', () {
     late BrantaService service;
@@ -104,7 +127,7 @@ void main() {
       final result = await service.getPaymentsByQrCodeAsync(notFound);
       expect(result.payments, isEmpty);
     });
-  });
+  }, skip: skipLive);
 
   // Production — Strict (plain-text addresses return empty)
   group('Production (strict)', () {
@@ -147,7 +170,7 @@ void main() {
       final result = await service.getPaymentsByQrCodeAsync(notFound);
       expect(result.payments, isEmpty);
     });
-  });
+  }, skip: skipLive);
 
   // Staging — Strict (plain-text addresses return empty)
   group('Staging (strict)', () {
@@ -190,5 +213,5 @@ void main() {
       final result = await service.getPaymentsByQrCodeAsync(notFound);
       expect(result.payments, isEmpty);
     });
-  });
+  }, skip: skipLive);
 }
