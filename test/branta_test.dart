@@ -584,6 +584,53 @@ void main() {
       expect(result.destinations[1].value, equals('sp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw'));
       expect(result.destinations[1].type, equals(DestinationType.silentPayment));
     });
+
+    test('bip321 bc and tb params are on-chain destinations and verifiable', () {
+      final result = QRParser(
+          'bitcoin:?bc=bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4&tb=tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx');
+
+      expect(result.destinations.length, equals(3));
+      expect(result.destinations[1].type, equals(DestinationType.bitcoinAddress));
+      expect(result.destinations[2].type, equals(DestinationType.bitcoinAddress));
+      expect(result.hasUnverifiableInstruction, isFalse);
+    });
+
+    test('sp param is a silent payment destination and verifiable', () {
+      final result = QRParser(
+          'bitcoin:?sp=sp1qqwl5p9jhz0000h5zkvlf9gfqv9dl9qjp5ggq5x3fw');
+
+      expect(result.destinations.length, equals(2));
+      expect(result.destinations[1].type, equals(DestinationType.silentPayment));
+      expect(result.hasUnverifiableInstruction, isFalse);
+    });
+
+    test('lno param is unverifiable', () {
+      final result = QRParser('bitcoin:?lno=lno1qgsqvgnwgcg35z6ee2h3yczraddm72xrfua9uve2rlrm9deu7xyfzrc');
+
+      expect(result.destinations.length, equals(2));
+      expect(result.destinations[1].type, equals(DestinationType.bolt12));
+      expect(result.hasUnverifiableInstruction, isTrue);
+    });
+
+    test('pay param is unverifiable and not added as a destination', () {
+      final result = QRParser('bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?pay=https%3A%2F%2Fevil.example%2Fpay');
+
+      expect(result.destinations.length, equals(1));
+      expect(result.hasUnverifiableInstruction, isTrue);
+    });
+
+    test('hash-ZK lightning, ark and sp params are verifiable', () {
+      final result = QRParser(
+          'bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?lightning=lnbc100n1ptest&ark=ark100testaddress');
+
+      expect(result.hasUnverifiableInstruction, isFalse);
+    });
+
+    test('non hash-ZK lightning path destination is unverifiable', () {
+      expect(QRParser('lightning:lno1qgsqvgnwgcg35z6ee2h3yczraddm72xrfua9uve2rlrm9deu7xyfzrc').hasUnverifiableInstruction, isTrue);
+      expect(QRParser('lightning:LNURL1DP68GURN8GHJ7').hasUnverifiableInstruction, isTrue);
+      expect(QRParser('lightning:lnbc100n1ptest').hasUnverifiableInstruction, isFalse);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -977,13 +1024,124 @@ void main() {
     });
 
     test('lightning QR with ZK params and no plaintext on-chain address decrypts without comparison', () async {
-      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final payment = PaymentBuilder()
+          .addDestination(_encryptedBitcoinAddress, type: DestinationType.bitcoinAddress)
+          .setZk()
+          .addDestination(_encryptedBolt11, type: DestinationType.bolt11)
+          .setZk()
+          .build();
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
       final qrText =
           'lightning:$_bolt11Invoice?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
 
       final result = await service.getPaymentsByQrCodeAsync(qrText);
 
+      expect(result.payments.length, equals(1));
       expect(result.payments[0].destinations[0].value, equals(_bitcoinAddress));
+      expect(result.payments[0].destinations[1].value, equals(_decryptedBolt11));
+    });
+
+    Matcher isTampered() => throwsA(isA<BrantaPaymentException>().having(
+          (e) => e.reason,
+          'reason',
+          BrantaPaymentExceptionReason.tampered,
+        ));
+
+    test('swapped address with wrong secret returns no payments', () async {
+      aes.setupDecryptThrows(_encryptedBitcoinAddress, 'wrong-secret', Exception('bad decrypt'));
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$swappedAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=wrong-secret';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments, isEmpty);
+      expect(result.verifyUrl, contains(_encryptedBitcoinAddress));
+    });
+
+    test('attacker lightning leg returns no payments', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret&lightning=lnbc1attacker';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments, isEmpty);
+      expect(client.countGetCalls(_encryptedBitcoinAddress), equals(1));
+    });
+
+    test('attacker ark leg returns no payments', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret&ark=ark1attacker';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments, isEmpty);
+    });
+
+    test('bip321 bc param with swapped address rejects', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:?bc=$swappedAddress&branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
+
+      expect(() => service.getPaymentsByQrCodeAsync(qrText), isTampered());
+    });
+
+    test('bip321 bc param with matching address returns payment', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:?bc=$_bitcoinAddress&branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments.length, equals(1));
+      expect(result.payments[0].destinations[0].value, equals(_bitcoinAddress));
+    });
+
+    test('path address conflicting with bc param rejects before lookup', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$_bitcoinAddress?bc=$swappedAddress&branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret';
+
+      await expectLater(service.getPaymentsByQrCodeAsync(qrText), isTampered());
+
+      expect(client.getPaymentsCalls, isEmpty);
+    });
+
+    test('pay param returns no payments without calling the client', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret&pay=https%3A%2F%2Fevil.example%2Fpay';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments, isEmpty);
+      expect(client.getPaymentsCalls, isEmpty);
+    });
+
+    test('lno param returns no payments without calling the client', () async {
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret&lno=lno1attacker';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments, isEmpty);
+      expect(client.getPaymentsCalls, isEmpty);
+    });
+
+    test('no payable address with wrong secret still returns the encrypted record', () async {
+      aes.setupDecryptThrows(_encryptedBitcoinAddress, 'wrong-secret', Exception('bad decrypt'));
+      client.setupGetPayments(_encryptedBitcoinAddress, [_zkBitcoinPayment]);
+      final qrText =
+          'bitcoin:?branta_id=$_encryptedBitcoinAddress&branta_secret=wrong-secret';
+
+      final result = await service.getPaymentsByQrCodeAsync(qrText);
+
+      expect(result.payments.length, equals(1));
+      expect(result.payments[0].destinations[0].value, equals(_encryptedBitcoinAddress));
+      expect(result.payments[0].destinations[0].isEncrypted, isTrue);
     });
 
     test('combined ZK QR with swapped address rejects', () async {
