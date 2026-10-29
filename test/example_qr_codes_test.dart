@@ -41,9 +41,11 @@ BrantaService _makeService(BrantaServerBaseUrl baseUrl, PrivacyMode privacy) {
 }
 
 void main() {
-  final skipLive = io.Platform.environment.containsKey('BRANTA_SKIP_INTEGRATION')
-      ? 'Integration tests skipped (BRANTA_SKIP_INTEGRATION set)'
-      : null;
+  // Live lookups of the published example QR codes. Skipped unless
+  // BRANTA_RUN_INTEGRATION=1 — local `dart test` and PR CI must not hit Guardrail.
+  final skipLive = io.Platform.environment['BRANTA_RUN_INTEGRATION'] == '1'
+      ? null
+      : 'Live lookups skipped unless BRANTA_RUN_INTEGRATION=1';
 
   group('Production', () {
     late BrantaService service;

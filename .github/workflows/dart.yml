@@ -29,8 +29,6 @@ jobs:
 
       - name: Test with coverage
         run: dart test --coverage=coverage
-        env:
-          BRANTA_SKIP_INTEGRATION: "1"
 
       - name: Format coverage (lcov)
         run: dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
