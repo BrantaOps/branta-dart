@@ -1,3 +1,8 @@
+## Unreleased
+
+- Fixed: `getPaymentsByQrCodeAsync` now requires every payment instruction in a scanned QR code to match a decrypted destination. A swapped address with a rewritten `branta_secret`, an added lightning/ark/silent-payment leg that does not match the registered record, or a conflicting `bc=`/`tb=` address no longer comes back as verified. QR codes carrying `bolt12`, `lno=`, `pay=`, or LNURL instructions return no payments (ported from `branta-js`)
+- Added: BIP-321 `bc`, `tb`, `sp`, and `lno` query parameters are parsed by `QRParser`; `QRParser.hasUnverifiableInstruction` flags instructions the SDK cannot bind to a decrypted destination
+
 ## 3.2.3
 
 - Added: recognize signet and regtest Ark addresses (`tark1`) as `arkAddress`, alongside mainnet `ark1`. Strict-mode hash-ZK lookup and registration treat them the same way as `ark1`.

@@ -30,28 +30,52 @@ class BrantaService implements IBrantaService {
         _defaultOptions = defaultOptions,
         _secretGenerator = secretGenerator ?? GuidSecretGenerator();
 
+  static const _tamperedMessage =
+      'The Bitcoin address in the QR code does not match the address verified by Branta. The QR code may have been tampered with.';
+
   static bool _addressesMatch(String a, String b) {
-    bool isBech32(String v) => v.toLowerCase().startsWith('bc1');
+    bool isBech32(String v) => RegExp(r'^(bc|tb|bcrt)1', caseSensitive: false).hasMatch(v);
     if (isBech32(a) && isBech32(b)) return a.toLowerCase() == b.toLowerCase();
     return a == b;
+  }
+
+  /// Returns the single on-chain address every on-chain instruction in the QR
+  /// agrees on (or null if there is none). Throws if two of them disagree.
+  static String? _uniformOnChainAddress(QRParser parser) {
+    final addresses = parser.destinations
+        .where((d) => d.type == DestinationType.bitcoinAddress && d.value.trim().isNotEmpty)
+        .map((d) => d.value)
+        .toList();
+    if (addresses.isEmpty) return null;
+    final first = addresses.first;
+    for (final address in addresses.skip(1)) {
+      if (!_addressesMatch(first, address)) {
+        throw BrantaPaymentException(_tamperedMessage, BrantaPaymentExceptionReason.tampered);
+      }
+    }
+    return first;
   }
 
   @override
   Future<PaymentsResult> getPaymentsByQrCodeAsync(String qrText, {BrantaClientOptions? options}) async {
     final parser = QRParser(qrText);
+    final expectedOnChainAddress = _uniformOnChainAddress(parser);
+
+    if (parser.hasUnverifiableInstruction) {
+      final lookup = parser.onChainEncryptionText ?? parser.destination ?? '';
+      return PaymentsResult(payments: [], verifyUrl: _buildVerifyUrl(options, lookup));
+    }
 
     if (parser.isOnChainZk()) {
       final additionalValues = parser.destinations
           .where((d) => d.value.getHashZkType() != null)
           .map((d) => d.value)
           .toList();
-      final onChainDestinations = parser.destinations.where((d) => d.type == DestinationType.bitcoinAddress);
-      final onChainAddress = onChainDestinations.isNotEmpty ? onChainDestinations.first.value : null;
       return _getPaymentsForZkAsync(
         parser.onChainEncryptionText!,
         parser.onChainEncryptionSecret,
         additionalValues,
-        onChainAddress,
+        expectedOnChainAddress,
         options: options,
       );
     }
@@ -78,33 +102,43 @@ class BrantaService implements IBrantaService {
     final payments = await _client.getPaymentsAsync(lookupValue, options: options);
 
     final keys = <String, String>{};
+    final bound = <Payment>[];
     for (final payment in payments) {
-      await _decryptDestinations(payment, lookupValue, encryptionKey, null, keys, expectedOnChainAddress: expectedOnChainAddress);
+      final onChainBound = await _decryptDestinations(payment, lookupValue, encryptionKey, null, keys,
+          expectedOnChainAddress: expectedOnChainAddress);
+      var hashesBound = true;
       for (final value in additionalHashValues) {
-        await _decryptHashZkDestinations(payment, value, keys);
+        if (!await _decryptHashZkDestinations(payment, value, keys)) {
+          hashesBound = false;
+        }
       }
+      if (onChainBound && hashesBound) bound.add(payment);
     }
 
     return PaymentsResult(
-      payments: payments,
+      payments: bound,
       verifyUrl: _buildVerifyUrl(options, lookupValue, keys),
     );
   }
 
-  Future<void> _decryptHashZkDestinations(
+  /// Returns true if at least one destination of the matching hash-ZK type
+  /// was decrypted with the key derived from [plainValue].
+  Future<bool> _decryptHashZkDestinations(
     Payment payment,
     String plainValue,
     Map<String, String> keys,
   ) async {
     final hashZkType = plainValue.getHashZkType();
-    if (hashZkType == null) return;
+    if (hashZkType == null) return false;
 
+    var bound = false;
     final key = plainValue.toNormalizedHash();
     for (final destination in payment.destinations) {
       if (!destination.isZk || destination.type != hashZkType) continue;
       try {
         destination.value = await _aesEncryption.decrypt(destination.value, key);
         destination.isEncrypted = false;
+        bound = true;
         final zkId = destination.zkId;
         if (zkId != null) keys.putIfAbsent(zkId, () => key);
         await _tryDecryptMetadata(payment, destination, key);
@@ -112,6 +146,7 @@ class BrantaService implements IBrantaService {
         // Key didn't match this destination — leave it encrypted.
       }
     }
+    return bound;
   }
 
   @override
@@ -156,7 +191,9 @@ class BrantaService implements IBrantaService {
     );
   }
 
-  Future<void> _decryptDestinations(
+  /// Returns true if the on-chain side is bound: either no on-chain address
+  /// was expected, or one was decrypted and matched [expectedOnChainAddress].
+  Future<bool> _decryptDestinations(
     Payment payment,
     String destinationValue,
     String? encryptionKey,
@@ -164,6 +201,7 @@ class BrantaService implements IBrantaService {
     Map<String, String> keys, {
     String? expectedOnChainAddress,
   }) async {
+    var onChainBound = expectedOnChainAddress == null;
     for (final destination in payment.destinations) {
       destination.isEncrypted = destination.isZk;
       if (!destination.isZk) continue;
@@ -179,11 +217,9 @@ class BrantaService implements IBrantaService {
         }
 
         if (expectedOnChainAddress != null && !_addressesMatch(decrypted, expectedOnChainAddress)) {
-          throw BrantaPaymentException(
-            'The Bitcoin address in the QR code does not match the address verified by Branta. The QR code may have been tampered with.',
-            BrantaPaymentExceptionReason.tampered,
-          );
+          throw BrantaPaymentException(_tamperedMessage, BrantaPaymentExceptionReason.tampered);
         }
+        if (expectedOnChainAddress != null) onChainBound = true;
 
         destination.value = decrypted;
         destination.isEncrypted = false;
@@ -203,6 +239,7 @@ class BrantaService implements IBrantaService {
         }
       }
     }
+    return onChainBound;
   }
 
   Future<void> _tryDecryptMetadata(

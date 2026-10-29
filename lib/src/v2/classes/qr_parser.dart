@@ -12,6 +12,9 @@ class QRParser {
   String? onChainEncryptionText;
   String? onChainEncryptionSecret;
 
+  /// A payable instruction this SDK cannot bind to a decrypted destination.
+  bool hasUnverifiableInstruction = false;
+
   QRParser(String qrText) {
     final text = qrText.trim();
     final uri = Uri.tryParse(text);
@@ -25,32 +28,41 @@ class QRParser {
     if (uri.scheme == 'bitcoin' || uri.scheme == 'lightning') {
       final dest = _getDestination(text);
       if (dest != null) {
-        destinations.add(QrDestination(dest, _getDestinationType(text)));
+        final destType = _getDestinationType(text);
+        destinations.add(QrDestination(dest, destType));
+        if (dest.isNotEmpty && destType != DestinationType.bitcoinAddress && dest.getHashZkType() == null) {
+          hasUnverifiableInstruction = true;
+        }
       }
 
       final queryParams = _parseQueryString(uri.query);
       onChainEncryptionText = queryParams['branta_id'];
       onChainEncryptionSecret = queryParams['branta_secret'];
 
-      final lightningValue = queryParams['lightning'];
-      if (lightningValue != null) {
-        destinations.add(QrDestination(lightningValue, _detectPlainTextType(lightningValue)));
+      void addBindable(String? value, DestinationType? type, {required bool onChain}) {
+        if (value == null) return;
+        destinations.add(QrDestination(value, type));
+        if (value.isNotEmpty && !onChain && value.getHashZkType() == null) {
+          hasUnverifiableInstruction = true;
+        }
       }
 
-      final bolt12Value = queryParams['bolt12'];
-      if (bolt12Value != null) {
-        destinations.add(QrDestination(bolt12Value, _detectPlainTextType(bolt12Value)));
+      for (final key in const ['lightning', 'bolt12', 'ark', 'silent_payment']) {
+        final value = queryParams[key];
+        addBindable(value, value == null ? null : _detectPlainTextType(value), onChain: false);
       }
-
-      final arkValue = queryParams['ark'];
-      if (arkValue != null) {
-        destinations.add(QrDestination(arkValue, _detectPlainTextType(arkValue)));
-      }
-
-      final silentPaymentValue = queryParams['silent_payment'];
-      if (silentPaymentValue != null) {
-        destinations.add(QrDestination(silentPaymentValue, _detectPlainTextType(silentPaymentValue)));
-      }
+      addBindable(queryParams['bc'], DestinationType.bitcoinAddress, onChain: true);
+      addBindable(queryParams['tb'], DestinationType.bitcoinAddress, onChain: true);
+      final spValue = queryParams['sp'];
+      addBindable(spValue, spValue == null ? null : _detectPlainTextType(spValue), onChain: false);
+      final lnoValue = queryParams['lno'];
+      addBindable(
+        lnoValue,
+        lnoValue == null || lnoValue.isEmpty ? null : (_detectPlainTextType(lnoValue) ?? DestinationType.bolt12),
+        onChain: false,
+      );
+      final payValue = queryParams['pay'];
+      if (payValue != null && payValue.isNotEmpty) hasUnverifiableInstruction = true;
 
       return;
     }
