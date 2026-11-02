@@ -1,11 +1,11 @@
 import 'package:branta/branta.dart';
 import 'package:branta/src/exceptions/incomplete_error.dart';
-import 'package:branta/src/helpers/aes_encryption.dart';
+import 'package:branta/src/helpers/aes_gcm_cipher.dart';
 import 'package:branta/src/helpers/branta_extensions.dart';
 import 'package:branta/src/classes/qr_parser.dart';
-import 'package:branta/src/interfaces/i_aes_encryption.dart';
-import 'package:branta/src/interfaces/i_branta_client.dart';
-import 'package:branta/src/interfaces/i_secret_generator.dart';
+import 'package:branta/src/interfaces/aes_encryption.dart';
+import 'package:branta/src/interfaces/branta_client.dart';
+import 'package:branta/src/interfaces/secret_generator.dart';
 import 'package:test/test.dart';
 
 class ClientCall {
@@ -14,7 +14,7 @@ class ClientCall {
   ClientCall(this.address, this.options);
 }
 
-class MockBrantaClient implements IBrantaClient {
+class MockBrantaClient implements BrantaClient {
   final Map<String, List<Payment>> _getPaymentsMap = {};
   Payment? _postPaymentResponse;
   bool _isApiKeyValid = true;
@@ -92,7 +92,7 @@ class _DecryptSetup {
   _DecryptSetup(this.encrypted, this.secret, this.result);
 }
 
-class MockAesEncryption implements IAesEncryption {
+class MockAesEncryption implements AesEncryption {
   final List<_EncryptSetup> _encryptSetups = [];
   final List<_DecryptSetup> _decryptSetups = [];
   final List<EncryptCall> encryptCalls = [];
@@ -151,7 +151,7 @@ class MockAesEncryption implements IAesEncryption {
   }
 }
 
-class MockSecretGenerator implements ISecretGenerator {
+class MockSecretGenerator implements SecretGenerator {
   final String _secret;
   int generateCount = 0;
   MockSecretGenerator(this._secret);
@@ -166,7 +166,7 @@ class MockSecretGenerator implements ISecretGenerator {
   bool get deterministicNonce => false;
 }
 
-class MockSequentialSecretGenerator implements ISecretGenerator {
+class MockSequentialSecretGenerator implements SecretGenerator {
   final List<String> _values;
   int _index = 0;
   MockSequentialSecretGenerator(this._values);
@@ -210,7 +210,7 @@ Payment _encryptedPayment(
 BrantaService _makeService(
   MockBrantaClient client,
   MockAesEncryption aes, {
-  ISecretGenerator? secretGenerator,
+  SecretGenerator? secretGenerator,
 }) {
   return BrantaService(
     environment: BrantaEnvironment.localhost,
@@ -242,24 +242,24 @@ void _setupDefaultMocks(MockAesEncryption aes) {
 }
 
 void main() {
-  group('AesEncryption', () {
+  group('AesGcmCipher', () {
     test('encrypt and decrypt round-trips', () async {
       const address = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
       const secret = 'test-secret';
-      final encrypted = await AesEncryption.encrypt(address, secret);
-      final decrypted = await AesEncryption.decrypt(encrypted, secret);
+      final encrypted = await AesGcmCipher.encrypt(address, secret);
+      final decrypted = await AesGcmCipher.decrypt(encrypted, secret);
       expect(decrypted, equals(address));
     });
 
     test('deterministic nonce produces same ciphertext each time', () async {
       const value = 'lnbc100n1ptest';
       const secret = 'hash-key';
-      final first = await AesEncryption.encrypt(
+      final first = await AesGcmCipher.encrypt(
         value,
         secret,
         deterministicNonce: true,
       );
-      final second = await AesEncryption.encrypt(
+      final second = await AesGcmCipher.encrypt(
         value,
         secret,
         deterministicNonce: true,
@@ -270,8 +270,8 @@ void main() {
     test('random nonce produces different ciphertext each time', () async {
       const value = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
       const secret = 'test-secret';
-      final first = await AesEncryption.encrypt(value, secret);
-      final second = await AesEncryption.encrypt(value, secret);
+      final first = await AesGcmCipher.encrypt(value, secret);
+      final second = await AesGcmCipher.encrypt(value, secret);
       expect(first, isNot(equals(second)));
     });
   });

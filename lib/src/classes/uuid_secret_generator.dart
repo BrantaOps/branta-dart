@@ -1,7 +1,7 @@
 import 'package:uuid/uuid.dart';
-import '../interfaces/i_secret_generator.dart';
+import '../interfaces/secret_generator.dart';
 
-class GuidSecretGenerator implements ISecretGenerator {
+class UuidSecretGenerator implements SecretGenerator {
   @override
   String generate() => const Uuid().v4();
 

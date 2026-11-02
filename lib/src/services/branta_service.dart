@@ -6,18 +6,18 @@ import '../enums/destination_type.dart';
 import '../exceptions/branta_payment_exception.dart';
 import '../exceptions/incomplete_error.dart';
 import '../helpers/branta_extensions.dart';
-import '../classes/guid_secret_generator.dart';
+import '../classes/uuid_secret_generator.dart';
 import '../classes/qr_parser.dart';
 import '../classes/aes_encryption_service.dart';
-import '../interfaces/i_aes_encryption.dart';
-import '../interfaces/i_branta_client.dart';
-import '../interfaces/i_secret_generator.dart';
+import '../interfaces/aes_encryption.dart';
+import '../interfaces/branta_client.dart';
+import '../interfaces/secret_generator.dart';
 import '../models/add_payment_result.dart';
 import '../models/destination.dart';
 import '../models/payment.dart';
 import '../models/platform.dart';
 import '../models/verify_result.dart';
-import 'branta_client.dart';
+import 'http_branta_client.dart';
 
 class _TamperedError implements Exception {}
 
@@ -91,10 +91,10 @@ String? _uniformOnChainAddress(QRParser parser) {
 }
 
 class BrantaService {
-  final IBrantaClient _client;
-  final IAesEncryption _aesEncryption;
+  final BrantaClient _client;
+  final AesEncryption _aesEncryption;
   final BrantaApiOptions _defaultOptions;
-  final ISecretGenerator _secretGenerator;
+  final SecretGenerator _secretGenerator;
   final bool _ownsHttpClient;
 
   BrantaService({
@@ -102,20 +102,20 @@ class BrantaService {
     String? apiKey,
     String? hmacSecret,
     http.Client? httpClient,
-    IBrantaClient? client,
-    IAesEncryption? aesEncryption,
-    ISecretGenerator? secretGenerator,
+    BrantaClient? client,
+    AesEncryption? aesEncryption,
+    SecretGenerator? secretGenerator,
   }) : _defaultOptions = BrantaApiOptions(
          environment: environment,
          apiKey: apiKey,
          hmacSecret: hmacSecret,
        ),
        _aesEncryption = aesEncryption ?? AesEncryptionService(),
-       _secretGenerator = secretGenerator ?? GuidSecretGenerator(),
+       _secretGenerator = secretGenerator ?? UuidSecretGenerator(),
        _ownsHttpClient = client == null && httpClient == null,
        _client =
            client ??
-           BrantaClient(
+           HttpBrantaClient(
              httpClient: httpClient ?? http.Client(),
              defaultOptions: BrantaApiOptions(
                environment: environment,
@@ -126,7 +126,7 @@ class BrantaService {
 
   /// Closes the HTTP client this service created. A client passed in is left open.
   void close() {
-    if (_ownsHttpClient && _client is BrantaClient) {
+    if (_ownsHttpClient && _client is HttpBrantaClient) {
       _client.dispose();
     }
   }

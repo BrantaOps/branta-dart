@@ -34,11 +34,6 @@ class Payment {
     this.isMetadataDecrypted = false,
   });
 
-  String getDefaultValue() {
-    if (destinations.isEmpty) throw Exception('Payment has no destinations.');
-    return destinations.first.value;
-  }
-
   factory Payment.fromJson(Map<String, dynamic> json) {
     final destinationsRaw = json['destinations'];
     return Payment(

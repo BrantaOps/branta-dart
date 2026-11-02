@@ -5,14 +5,14 @@ import '../classes/branta_api_options.dart';
 import '../exceptions/branta_payment_exception.dart';
 import '../exceptions/incomplete_error.dart';
 import '../helpers/branta_extensions.dart';
-import '../interfaces/i_branta_client.dart';
+import '../interfaces/branta_client.dart';
 import '../models/payment.dart';
 
-class BrantaClient implements IBrantaClient {
+class HttpBrantaClient implements BrantaClient {
   final http.Client _httpClient;
   final BrantaApiOptions _defaultOptions;
 
-  BrantaClient({
+  HttpBrantaClient({
     required http.Client httpClient,
     required BrantaApiOptions defaultOptions,
   }) : _httpClient = httpClient,

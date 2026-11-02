@@ -1,7 +1,7 @@
 import '../classes/branta_api_options.dart';
 import '../models/payment.dart';
 
-abstract class IBrantaClient {
+abstract class BrantaClient {
   Future<List<Payment>> getPayments(
     String destinationValue, {
     BrantaApiOptions? options,

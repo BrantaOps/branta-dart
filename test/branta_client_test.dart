@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:branta/branta.dart';
 import 'package:branta/src/exceptions/incomplete_error.dart';
-import 'package:branta/src/services/branta_client.dart';
+import 'package:branta/src/services/http_branta_client.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
@@ -14,7 +14,7 @@ const destinations = [
   {'value': 'test-destination'},
 ];
 
-BrantaClient clientWithResponse(
+HttpBrantaClient clientWithResponse(
   dynamic body, {
   int statusCode = 200,
   String? apiKey,
@@ -22,7 +22,7 @@ BrantaClient clientWithResponse(
   final httpClient = MockClient((request) async {
     return http.Response(body is String ? body : jsonEncode(body), statusCode);
   });
-  return BrantaClient(
+  return HttpBrantaClient(
     httpClient: httpClient,
     defaultOptions: BrantaApiOptions(
       environment: BrantaEnvironment.localhost,
@@ -32,7 +32,7 @@ BrantaClient clientWithResponse(
 }
 
 void main() {
-  group('BrantaClient.getPayments logo url validation', () {
+  group('HttpBrantaClient.getPayments logo url validation', () {
     test('checks every payment logo url, not just the first', () async {
       final client = clientWithResponse([
         {'destinations': destinations},
@@ -171,7 +171,7 @@ void main() {
     );
   });
 
-  group('BrantaClient.getPayments HTTP errors', () {
+  group('HttpBrantaClient.getPayments HTTP errors', () {
     test('404 returns an empty list', () async {
       final client = clientWithResponse('', statusCode: 404);
       expect(await client.getPayments('value'), isEmpty);
@@ -191,7 +191,7 @@ void main() {
       final httpClient = MockClient((request) async {
         throw http.ClientException('Failed to fetch');
       });
-      final client = BrantaClient(
+      final client = HttpBrantaClient(
         httpClient: httpClient,
         defaultOptions: const BrantaApiOptions(
           environment: BrantaEnvironment.localhost,
@@ -204,7 +204,7 @@ void main() {
     });
   });
 
-  group('BrantaClient.postPayment HTTP errors', () {
+  group('HttpBrantaClient.postPayment HTTP errors', () {
     final payment = Payment(
       destinations: [Destination(value: 'test-destination')],
     );

@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart' hide Hmac;
 
-class AesEncryption {
+class AesGcmCipher {
   static Future<String> encrypt(
     String value,
     String secret, {

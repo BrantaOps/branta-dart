@@ -4,6 +4,7 @@
 - Breaking: removed `PrivacyMode`. Every destination is encrypted. `BrantaClientOptions` and `BrantaServerBaseUrl` are now `BrantaApiOptions` and `BrantaEnvironment`.
 - Breaking: `Destination.id` is the public name for the wire field `zk_id`. `addPayment` encrypts a copy and leaves the caller's `Payment` unchanged. Description is stored in encrypted metadata. An unset TTL is omitted. `DestinationType` is `bitcoin_address`, `bolt11`, `ark_address`, and `silent_payment`.
 - The public library no longer exports the HTTP client, QR parser, AES helpers, or `QRParseException`.
+- Breaking: removed `Payment.getDefaultValue`.
 
 ## 3.2.4
 

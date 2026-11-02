@@ -1,13 +1,13 @@
-import '../helpers/aes_encryption.dart';
-import '../interfaces/i_aes_encryption.dart';
+import '../helpers/aes_gcm_cipher.dart';
+import '../interfaces/aes_encryption.dart';
 
-class AesEncryptionService implements IAesEncryption {
+class AesEncryptionService implements AesEncryption {
   @override
   Future<String> encrypt(
     String value,
     String secret, {
     bool deterministicNonce = false,
-  }) => AesEncryption.encrypt(
+  }) => AesGcmCipher.encrypt(
     value,
     secret,
     deterministicNonce: deterministicNonce,
@@ -15,5 +15,5 @@ class AesEncryptionService implements IAesEncryption {
 
   @override
   Future<String> decrypt(String encryptedValue, String secret) =>
-      AesEncryption.decrypt(encryptedValue, secret);
+      AesGcmCipher.decrypt(encryptedValue, secret);
 }

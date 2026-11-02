@@ -1,4 +1,4 @@
-abstract class IAesEncryption {
+abstract class AesEncryption {
   Future<String> encrypt(
     String value,
     String secret, {
