@@ -7,6 +7,81 @@ class QrDestination {
   const QrDestination(this.value, this.type);
 }
 
+String normalizeQrText(String qrText) {
+  var value = qrText.trim();
+  bool isC0OrSpace(int code) => code <= 0x20;
+  var start = 0;
+  var end = value.length;
+  while (start < end && isC0OrSpace(value.codeUnitAt(start))) {
+    start++;
+  }
+  while (end > start && isC0OrSpace(value.codeUnitAt(end - 1))) {
+    end--;
+  }
+  value = value.substring(start, end);
+  return value.replaceAll(RegExp(r'[\t\n\r]'), '');
+}
+
+DestinationType? detectDestinationType(String value) {
+  if (value.isBolt11()) return DestinationType.bolt11;
+  if (value.isArk()) return DestinationType.arkAddress;
+  if (value.isSilentPayment()) return DestinationType.silentPayment;
+  final lower = value.toLowerCase();
+  if (value.startsWith('1') ||
+      value.startsWith('3') ||
+      lower.startsWith('bc1') ||
+      lower.startsWith('tb1') ||
+      lower.startsWith('bcrt1')) {
+    return DestinationType.bitcoinAddress;
+  }
+  return null;
+}
+
+Map<String, String> parseQueryString(String query) {
+  final result = <String, String>{};
+  final trimmed = query.startsWith('?') ? query.substring(1) : query;
+  if (trimmed.isEmpty) return result;
+  for (final part in trimmed.split('&')) {
+    if (part.isEmpty) continue;
+    final idx = part.indexOf('=');
+    final rawKey = idx == -1 ? part : part.substring(0, idx);
+    final rawValue = idx == -1 ? '' : part.substring(idx + 1);
+    if (rawKey.isEmpty) continue;
+    try {
+      final key = Uri.decodeComponent(rawKey).toLowerCase();
+      final value = Uri.decodeComponent(rawValue);
+      result.putIfAbsent(key, () => value);
+    } on FormatException {
+      // skip malformed parameter
+    }
+  }
+  return result;
+}
+
+String? _getDestination(String text) {
+  final match = RegExp(r'(?<=:)[^?]*').firstMatch(text);
+  return match?.group(0);
+}
+
+bool _startsWithI(String value, String prefix) =>
+    value.toLowerCase().startsWith(prefix.toLowerCase());
+
+DestinationType? _getDestinationType(String text) {
+  if (_startsWithI(text, 'bitcoin:')) return DestinationType.bitcoinAddress;
+  if (_startsWithI(text, 'lightning:')) {
+    final dest = _getDestination(text);
+    if (dest != null && dest.isBolt11()) return DestinationType.bolt11;
+  }
+  return null;
+}
+
+String _queryFromText(String text) {
+  final q = text.indexOf('?');
+  if (q == -1) return '';
+  final hash = text.indexOf('#', q);
+  return text.substring(q, hash == -1 ? text.length : hash);
+}
+
 class QRParser {
   final List<QrDestination> destinations = [];
   String? onChainEncryptionText;
@@ -16,134 +91,88 @@ class QRParser {
   bool hasUnverifiableInstruction = false;
 
   QRParser(String qrText) {
-    final text = qrText.trim();
+    final text = normalizeQrText(qrText);
     final uri = Uri.tryParse(text);
 
     if (uri == null || !uri.hasScheme || uri.scheme.length == 1) {
-      // Not a URI — treat as plain text
-      destinations.add(QrDestination(text, _detectPlainTextType(text)));
+      destinations.add(QrDestination(text, detectDestinationType(text)));
       return;
     }
 
-    if (uri.scheme == 'bitcoin' || uri.scheme == 'lightning') {
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme == 'bitcoin' || scheme == 'lightning') {
       final dest = _getDestination(text);
       if (dest != null) {
         final destType = _getDestinationType(text);
         destinations.add(QrDestination(dest, destType));
-        if (dest.isNotEmpty && destType != DestinationType.bitcoinAddress && dest.getHashZkType() == null) {
+        if (dest.isNotEmpty &&
+            destType != DestinationType.bitcoinAddress &&
+            dest.getDerivedKeyType() == null) {
           hasUnverifiableInstruction = true;
         }
       }
 
-      final queryParams = _parseQueryString(uri.query);
+      final queryParams = parseQueryString(_queryFromText(text));
       onChainEncryptionText = queryParams['branta_id'];
       onChainEncryptionSecret = queryParams['branta_secret'];
 
-      void addBindable(String? value, DestinationType? type, {required bool onChain}) {
+      void addBindable(
+        String? value,
+        DestinationType? type, {
+        required bool onChain,
+      }) {
         if (value == null) return;
-        destinations.add(QrDestination(value, type));
-        if (value.isNotEmpty && !onChain && value.getHashZkType() == null) {
+        if (value.isNotEmpty && !onChain && value.getDerivedKeyType() == null) {
           hasUnverifiableInstruction = true;
+          return;
         }
+        destinations.add(QrDestination(value, type));
       }
 
-      for (final key in const ['lightning', 'bolt12', 'ark', 'silent_payment']) {
-        final value = queryParams[key];
-        addBindable(value, value == null ? null : _detectPlainTextType(value), onChain: false);
-      }
-      addBindable(queryParams['bc'], DestinationType.bitcoinAddress, onChain: true);
-      addBindable(queryParams['tb'], DestinationType.bitcoinAddress, onChain: true);
-      final spValue = queryParams['sp'];
-      addBindable(spValue, spValue == null ? null : _detectPlainTextType(spValue), onChain: false);
-      final lnoValue = queryParams['lno'];
       addBindable(
-        lnoValue,
-        lnoValue == null || lnoValue.isEmpty ? null : (_detectPlainTextType(lnoValue) ?? DestinationType.bolt12),
+        queryParams['lightning'],
+        detectDestinationType(queryParams['lightning'] ?? ''),
         onChain: false,
       );
-      final payValue = queryParams['pay'];
-      if (payValue != null && payValue.isNotEmpty) hasUnverifiableInstruction = true;
-
+      addBindable(
+        queryParams['ark'],
+        detectDestinationType(queryParams['ark'] ?? ''),
+        onChain: false,
+      );
+      addBindable(
+        queryParams['silent_payment'],
+        detectDestinationType(queryParams['silent_payment'] ?? ''),
+        onChain: false,
+      );
+      addBindable(
+        queryParams['bc'],
+        DestinationType.bitcoinAddress,
+        onChain: true,
+      );
+      addBindable(
+        queryParams['tb'],
+        DestinationType.bitcoinAddress,
+        onChain: true,
+      );
+      addBindable(
+        queryParams['sp'],
+        detectDestinationType(queryParams['sp'] ?? ''),
+        onChain: false,
+      );
+      if (queryParams.containsKey('bolt12')) hasUnverifiableInstruction = true;
+      if (queryParams.containsKey('lno')) hasUnverifiableInstruction = true;
+      if (queryParams.containsKey('pay')) hasUnverifiableInstruction = true;
       return;
     }
 
     destinations.add(QrDestination(text, null));
   }
 
-  String? get destination => destinations.isNotEmpty ? destinations.first.value : null;
-  DestinationType? get destinationType => destinations.isNotEmpty ? destinations.first.type : null;
+  String? get destination =>
+      destinations.isNotEmpty ? destinations.first.value : null;
+  DestinationType? get destinationType =>
+      destinations.isNotEmpty ? destinations.first.type : null;
 
-  bool isOnChainZk() => onChainEncryptionText != null && onChainEncryptionSecret != null;
-
-  static String? _getDestination(String text) {
-    final colonIdx = text.indexOf(':');
-    if (colonIdx == -1) return null;
-    final questionIdx = text.indexOf('?');
-    if (questionIdx == -1) return text.substring(colonIdx + 1);
-    return text.substring(colonIdx + 1, questionIdx);
-  }
-
-  static DestinationType? _getDestinationType(String text) {
-    if (text.toLowerCase().startsWith('bitcoin:')) {
-      return DestinationType.bitcoinAddress;
-    }
-    if (text.toLowerCase().startsWith('lightning:')) {
-      final dest = _getDestination(text);
-      if (dest != null) {
-        if (dest.isBolt11()) return DestinationType.bolt11;
-        if (dest.toLowerCase().startsWith('lno')) return DestinationType.bolt12;
-        if (dest.toLowerCase().startsWith('lnurl')) return DestinationType.lnUrl;
-      }
-    }
-    return null;
-  }
-
-  static DestinationType? _detectPlainTextType(String value) {
-    if (value.isBolt11()) return DestinationType.bolt11;
-    if (value.toLowerCase().startsWith('lno')) return DestinationType.bolt12;
-    if (value.toLowerCase().startsWith('lnurl')) return DestinationType.lnUrl;
-    if (value.isArk()) return DestinationType.arkAddress;
-    if (value.isSilentPayment()) return DestinationType.silentPayment;
-    if (_isEthereumAddress(value)) return DestinationType.tetherAddress;
-    if (_isTronAddress(value)) return DestinationType.tetherAddress;
-    if (_isLnAddress(value)) return DestinationType.lnAddress;
-    final lower = value.toLowerCase();
-    if (value.startsWith('1') || value.startsWith('3') || lower.startsWith('bc1')) {
-      return DestinationType.bitcoinAddress;
-    }
-    return null;
-  }
-
-  static bool _isEthereumAddress(String value) {
-    if (value.length != 42) return false;
-    if (!value.startsWith('0x') && !value.startsWith('0X')) return false;
-    return RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(value.substring(2));
-  }
-
-  static bool _isTronAddress(String value) {
-    return value.length == 34 && value.startsWith('T');
-  }
-
-  static bool _isLnAddress(String value) {
-    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
-  }
-
-  static Map<String, String> _parseQueryString(String query) {
-    if (query.isEmpty) return {};
-    final result = <String, String>{};
-    final parts = query.startsWith('?') ? query.substring(1) : query;
-    for (final part in parts.split('&')) {
-      if (part.isEmpty) continue;
-      final eqIdx = part.indexOf('=');
-      if (eqIdx == -1) {
-        final key = Uri.decodeComponent(part);
-        if (key.isNotEmpty) result[key] = '';
-      } else {
-        final key = Uri.decodeComponent(part.substring(0, eqIdx));
-        final value = Uri.decodeComponent(part.substring(eqIdx + 1));
-        if (key.isNotEmpty) result[key] = value;
-      }
-    }
-    return result;
-  }
+  bool hasBrantaParams() =>
+      onChainEncryptionText != null && onChainEncryptionSecret != null;
 }

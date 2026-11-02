@@ -1,243 +1,333 @@
-import '../../classes/branta_client_options.dart';
+import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
+import '../../classes/branta_api_options.dart';
+import '../../enums/branta_environment.dart';
 import '../../enums/destination_type.dart';
-import '../../enums/privacy_mode.dart';
 import '../../exceptions/branta_payment_exception.dart';
+import '../../exceptions/incomplete_error.dart';
 import '../../helpers/branta_extensions.dart';
 import '../classes/guid_secret_generator.dart';
 import '../classes/qr_parser.dart';
+import '../classes/aes_encryption_service.dart';
 import '../interfaces/i_aes_encryption.dart';
 import '../interfaces/i_branta_client.dart';
-import '../interfaces/i_branta_service.dart';
 import '../interfaces/i_secret_generator.dart';
 import '../models/add_payment_result.dart';
 import '../models/destination.dart';
 import '../models/payment.dart';
-import '../models/payments_result.dart';
+import '../models/platform.dart';
+import '../models/verify_result.dart';
+import 'branta_client.dart';
 
-class BrantaService implements IBrantaService {
+class _TamperedError implements Exception {}
+
+VerifyResult _toVerifyResult(List<Payment> payments, String verifyUrl) =>
+    payments.isEmpty
+    ? VerifyResult(status: VerifyStatus.unknown, verifyUrl: verifyUrl)
+    : VerifyResult(
+        status: VerifyStatus.match,
+        payments: payments,
+        verifyUrl: verifyUrl,
+      );
+
+/// Encrypt and post this copy. A failed post must leave the caller's Payment reusable.
+Payment _copyPayment(Payment payment) {
+  Platform? copyPlatform(Platform? platform) => platform == null
+      ? null
+      : Platform(
+          name: platform.name,
+          logoUrl: platform.logoUrl,
+          logoLightUrl: platform.logoLightUrl,
+        );
+
+  return Payment(
+    description: payment.description,
+    destinations: payment.destinations
+        .map(
+          (destination) => Destination(
+            value: destination.value,
+            isPrimary: destination.isPrimary,
+            isEncrypted: destination.isEncrypted,
+            type: destination.type,
+            id: destination.id,
+            encryptedDek: destination.encryptedDek,
+          ),
+        )
+        .toList(),
+    createdAt: payment.createdAt,
+    ttl: payment.ttl,
+    metadata: payment.metadata,
+    platform: payment.platform,
+    platformLogoUrl: payment.platformLogoUrl,
+    platformLogoLightUrl: payment.platformLogoLightUrl,
+    parentPlatform: copyPlatform(payment.parentPlatform),
+    childPlatform: copyPlatform(payment.childPlatform),
+  );
+}
+
+bool _addressesMatch(String a, String b) {
+  bool isBech32(String v) =>
+      RegExp(r'^(bc|tb|bcrt)1', caseSensitive: false).hasMatch(v);
+  if (isBech32(a) && isBech32(b)) return a.toLowerCase() == b.toLowerCase();
+  return a == b;
+}
+
+/// The single on-chain address every on-chain instruction agrees on, or null if there is none.
+String? _uniformOnChainAddress(QRParser parser) {
+  final addresses = parser.destinations
+      .where(
+        (d) =>
+            d.type == DestinationType.bitcoinAddress &&
+            d.value.trim().isNotEmpty,
+      )
+      .map((d) => d.value)
+      .toList();
+  if (addresses.isEmpty) return null;
+  final first = addresses.first;
+  for (final address in addresses.skip(1)) {
+    if (!_addressesMatch(first, address)) throw _TamperedError();
+  }
+  return first;
+}
+
+class BrantaService {
   final IBrantaClient _client;
   final IAesEncryption _aesEncryption;
-  final BrantaClientOptions _defaultOptions;
+  final BrantaApiOptions _defaultOptions;
   final ISecretGenerator _secretGenerator;
+  final bool _ownsHttpClient;
 
   BrantaService({
-    required IBrantaClient client,
-    required IAesEncryption aesEncryption,
-    required BrantaClientOptions defaultOptions,
+    required BrantaEnvironment environment,
+    String? apiKey,
+    String? hmacSecret,
+    http.Client? httpClient,
+    IBrantaClient? client,
+    IAesEncryption? aesEncryption,
     ISecretGenerator? secretGenerator,
-  })  : _client = client,
-        _aesEncryption = aesEncryption,
-        _defaultOptions = defaultOptions,
-        _secretGenerator = secretGenerator ?? GuidSecretGenerator();
+  }) : _defaultOptions = BrantaApiOptions(
+         environment: environment,
+         apiKey: apiKey,
+         hmacSecret: hmacSecret,
+       ),
+       _aesEncryption = aesEncryption ?? AesEncryptionService(),
+       _secretGenerator = secretGenerator ?? GuidSecretGenerator(),
+       _ownsHttpClient = client == null && httpClient == null,
+       _client =
+           client ??
+           BrantaClient(
+             httpClient: httpClient ?? http.Client(),
+             defaultOptions: BrantaApiOptions(
+               environment: environment,
+               apiKey: apiKey,
+               hmacSecret: hmacSecret,
+             ),
+           );
 
-  static const _tamperedMessage =
-      'The Bitcoin address in the QR code does not match the address verified by Branta. The QR code may have been tampered with.';
-
-  static bool _addressesMatch(String a, String b) {
-    bool isBech32(String v) => RegExp(r'^(bc|tb|bcrt)1', caseSensitive: false).hasMatch(v);
-    if (isBech32(a) && isBech32(b)) return a.toLowerCase() == b.toLowerCase();
-    return a == b;
+  /// Closes the HTTP client this service created. A client passed in is left open.
+  void close() {
+    if (_ownsHttpClient && _client is BrantaClient) {
+      _client.dispose();
+    }
   }
 
-  /// Returns the single on-chain address every on-chain instruction in the QR
-  /// agrees on (or null if there is none). Throws if two of them disagree.
-  static String? _uniformOnChainAddress(QRParser parser) {
-    final addresses = parser.destinations
-        .where((d) => d.type == DestinationType.bitcoinAddress && d.value.trim().isNotEmpty)
-        .map((d) => d.value)
-        .toList();
-    if (addresses.isEmpty) return null;
-    final first = addresses.first;
-    for (final address in addresses.skip(1)) {
-      if (!_addressesMatch(first, address)) {
-        throw BrantaPaymentException(_tamperedMessage, BrantaPaymentExceptionReason.tampered);
+  Future<VerifyResult> verify(String input, {BrantaApiOptions? options}) async {
+    final parser = QRParser(input);
+    final lookup = parser.onChainEncryptionText ?? parser.destination ?? '';
+
+    try {
+      final expectedOnChainAddress = _uniformOnChainAddress(parser);
+
+      if (parser.hasUnverifiableInstruction) {
+        return VerifyResult(
+          status: VerifyStatus.unknown,
+          verifyUrl: _buildVerifyUrl(options, lookup),
+        );
       }
-    }
-    return first;
-  }
 
-  @override
-  Future<PaymentsResult> getPaymentsByQrCodeAsync(String qrText, {BrantaClientOptions? options}) async {
-    final parser = QRParser(qrText);
-    final expectedOnChainAddress = _uniformOnChainAddress(parser);
+      if (parser.hasBrantaParams()) {
+        final additionalValues = parser.destinations
+            .where((d) => d.value.getDerivedKeyType() != null)
+            .map((d) => d.value)
+            .toList();
+        if (expectedOnChainAddress == null && additionalValues.isEmpty) {
+          return VerifyResult(
+            status: VerifyStatus.unknown,
+            verifyUrl: _buildVerifyUrl(options, lookup),
+          );
+        }
+        final lookedUp = await _lookupByBrantaId(
+          parser.onChainEncryptionText!,
+          parser.onChainEncryptionSecret,
+          additionalValues,
+          expectedOnChainAddress,
+          options: options,
+        );
+        return _toVerifyResult(lookedUp.payments, lookedUp.verifyUrl);
+      }
 
-    if (parser.hasUnverifiableInstruction) {
-      final lookup = parser.onChainEncryptionText ?? parser.destination ?? '';
-      return PaymentsResult(payments: [], verifyUrl: _buildVerifyUrl(options, lookup));
-    }
+      final destination = parser.destination!;
+      if (destination.getDerivedKeyType() == null) {
+        return VerifyResult(
+          status: VerifyStatus.unknown,
+          verifyUrl: _buildVerifyUrl(options, destination),
+        );
+      }
 
-    if (parser.isOnChainZk()) {
-      final additionalValues = parser.destinations
-          .where((d) => d.value.getHashZkType() != null)
-          .map((d) => d.value)
-          .toList();
-      return _getPaymentsForZkAsync(
-        parser.onChainEncryptionText!,
-        parser.onChainEncryptionSecret,
-        additionalValues,
-        expectedOnChainAddress,
-        options: options,
+      final lookedUp = await _lookupByDerivedKey(destination, options: options);
+      return _toVerifyResult(lookedUp.payments, lookedUp.verifyUrl);
+    } on _TamperedError {
+      return VerifyResult(
+        status: VerifyStatus.tampered,
+        verifyUrl: _buildVerifyUrl(options, lookup),
+      );
+    } on IncompleteError {
+      return VerifyResult(
+        status: VerifyStatus.incomplete,
+        verifyUrl: _buildVerifyUrl(options, lookup),
       );
     }
-
-    final destination = parser.destination!;
-    final privacy = _resolvePrivacy(options);
-    if (privacy == PrivacyMode.strict && destination.getHashZkType() == null) {
-      return PaymentsResult(
-        payments: [],
-        verifyUrl: _buildVerifyUrl(options, destination),
-      );
-    }
-
-    return getPaymentsAsync(destination, options: options);
   }
 
-  Future<PaymentsResult> _getPaymentsForZkAsync(
+  Future<({List<Payment> payments, String verifyUrl})> _lookupByBrantaId(
     String lookupValue,
     String? encryptionKey,
     List<String> additionalHashValues,
     String? expectedOnChainAddress, {
-    BrantaClientOptions? options,
+    BrantaApiOptions? options,
   }) async {
-    final payments = await _client.getPaymentsAsync(lookupValue, options: options);
+    final payments = await _client.getPayments(lookupValue, options: options);
 
     final keys = <String, String>{};
     final bound = <Payment>[];
     for (final payment in payments) {
-      final onChainBound = await _decryptDestinations(payment, lookupValue, encryptionKey, null, keys,
-          expectedOnChainAddress: expectedOnChainAddress);
+      final onChainBound = await _decryptDestinations(
+        payment,
+        encryptionKey,
+        keys,
+        expectedOnChainAddress: expectedOnChainAddress,
+      );
       var hashesBound = true;
       for (final value in additionalHashValues) {
-        if (!await _decryptHashZkDestinations(payment, value, keys)) {
+        if (!await _decryptDerivedKeyDestinations(payment, value, keys)) {
           hashesBound = false;
         }
       }
-      if (onChainBound && hashesBound) bound.add(payment);
+      final hasPayableInstruction =
+          expectedOnChainAddress != null || additionalHashValues.isNotEmpty;
+      if (hasPayableInstruction && onChainBound && hashesBound) {
+        bound.add(payment);
+      }
     }
 
-    return PaymentsResult(
+    return (
       payments: bound,
       verifyUrl: _buildVerifyUrl(options, lookupValue, keys),
     );
   }
 
-  /// Returns true if at least one destination of the matching hash-ZK type
-  /// was decrypted with the key derived from [plainValue].
-  Future<bool> _decryptHashZkDestinations(
+  /// True when at least one destination of the matching derived-key type decrypted with [plainValue].
+  Future<bool> _decryptDerivedKeyDestinations(
     Payment payment,
     String plainValue,
     Map<String, String> keys,
   ) async {
-    final hashZkType = plainValue.getHashZkType();
-    if (hashZkType == null) return false;
+    final derivedType = plainValue.getDerivedKeyType();
+    if (derivedType == null) return false;
 
-    var bound = false;
     final key = plainValue.toNormalizedHash();
+    var bound = false;
     for (final destination in payment.destinations) {
-      if (!destination.isZk || destination.type != hashZkType) continue;
+      if (!destination.isEncrypted || destination.type != derivedType) continue;
+      String decrypted;
       try {
-        destination.value = await _aesEncryption.decrypt(destination.value, key);
-        destination.isEncrypted = false;
-        bound = true;
-        final zkId = destination.zkId;
-        if (zkId != null) keys.putIfAbsent(zkId, () => key);
-        await _tryDecryptMetadata(payment, destination, key);
+        decrypted = await _aesEncryption.decrypt(destination.value, key);
+      } on StateError {
+        rethrow;
       } catch (_) {
         // Key didn't match this destination — leave it encrypted.
+        continue;
       }
+      if (decrypted.toLowerCase() != plainValue.toLowerCase()) {
+        throw _TamperedError();
+      }
+      destination.value = decrypted;
+      destination.isEncrypted = false;
+      final id = destination.id;
+      if (id != null) keys.putIfAbsent(id, () => key);
+      await _tryDecryptMetadata(payment, destination, key);
+      bound = true;
     }
     return bound;
   }
 
-  @override
-  Future<PaymentsResult> getPaymentsAsync(
+  Future<({List<Payment> payments, String verifyUrl})> _lookupByDerivedKey(
     String destinationValue, {
-    String? destinationEncryptionKey,
-    BrantaClientOptions? options,
+    BrantaApiOptions? options,
   }) async {
-    final hashZkType = destinationValue.getHashZkType();
-    final privacy = _resolvePrivacy(options);
+    final normalizedDestination = destinationValue.toLowerCase();
+    final key = normalizedDestination.toNormalizedHash();
+    final lookupValue = await _aesEncryption.encrypt(
+      normalizedDestination,
+      key,
+      deterministicNonce: true,
+    );
 
-    if (hashZkType == null && destinationEncryptionKey == null && privacy == PrivacyMode.strict) {
-      throw BrantaPaymentException(
-        'PrivacyMode.Strict does not permit plain-text lookups for this destination type.',
-      );
-    }
-
-    final normalizedDestination = hashZkType != null ? destinationValue.toLowerCase() : destinationValue;
-    String lookupValue;
-    if (hashZkType != null) {
-      final key = normalizedDestination.toNormalizedHash();
-      lookupValue = await _aesEncryption.encrypt(normalizedDestination, key, deterministicNonce: true);
-    } else {
-      lookupValue = destinationValue;
-    }
-
-    var payments = await _client.getPaymentsAsync(lookupValue, options: options);
-
-    if (payments.isEmpty && hashZkType != null && privacy != PrivacyMode.strict) {
-      lookupValue = normalizedDestination;
-      payments = await _client.getPaymentsAsync(lookupValue, options: options);
-    }
+    final payments = await _client.getPayments(lookupValue, options: options);
 
     final keys = <String, String>{};
+    final bound = <Payment>[];
     for (final payment in payments) {
-      await _decryptDestinations(payment, normalizedDestination, destinationEncryptionKey, hashZkType, keys);
+      if (await _decryptDerivedKeyDestinations(
+        payment,
+        normalizedDestination,
+        keys,
+      )) {
+        bound.add(payment);
+      }
     }
 
-    return PaymentsResult(
-      payments: payments,
+    return (
+      payments: bound,
       verifyUrl: _buildVerifyUrl(options, lookupValue, keys),
     );
   }
 
-  /// Returns true if the on-chain side is bound: either no on-chain address
-  /// was expected, or one was decrypted and matched [expectedOnChainAddress].
+  /// True when the on-chain side is bound: either no on-chain address was expected,
+  /// or one was decrypted and matched [expectedOnChainAddress].
   Future<bool> _decryptDestinations(
     Payment payment,
-    String destinationValue,
     String? encryptionKey,
-    DestinationType? hashZkType,
     Map<String, String> keys, {
     String? expectedOnChainAddress,
   }) async {
     var onChainBound = expectedOnChainAddress == null;
     for (final destination in payment.destinations) {
-      destination.isEncrypted = destination.isZk;
-      if (!destination.isZk) continue;
-
-      if (destination.type == DestinationType.bitcoinAddress) {
-        if (encryptionKey == null) continue;
-        String decrypted;
-        try {
-          decrypted = await _aesEncryption.decrypt(destination.value, encryptionKey);
-        } catch (_) {
-          // Key didn't match — leave it encrypted.
-          continue;
-        }
-
-        if (expectedOnChainAddress != null && !_addressesMatch(decrypted, expectedOnChainAddress)) {
-          throw BrantaPaymentException(_tamperedMessage, BrantaPaymentExceptionReason.tampered);
-        }
-        if (expectedOnChainAddress != null) onChainBound = true;
-
-        destination.value = decrypted;
-        destination.isEncrypted = false;
-        final zkId = destination.zkId;
-        if (zkId != null) keys.putIfAbsent(zkId, () => encryptionKey);
-        await _tryDecryptMetadata(payment, destination, encryptionKey);
-      } else if (hashZkType != null && destination.type == hashZkType) {
-        final key = destinationValue.toNormalizedHash();
-        try {
-          destination.value = await _aesEncryption.decrypt(destination.value, key);
-          destination.isEncrypted = false;
-          final zkId = destination.zkId;
-          if (zkId != null) keys.putIfAbsent(zkId, () => key);
-          await _tryDecryptMetadata(payment, destination, key);
-        } catch (_) {
-          // Key didn't match — leave it encrypted.
-        }
+      if (!destination.isEncrypted) continue;
+      if (destination.type != DestinationType.bitcoinAddress) continue;
+      if (encryptionKey == null) continue;
+      String decrypted;
+      try {
+        decrypted = await _aesEncryption.decrypt(
+          destination.value,
+          encryptionKey,
+        );
+      } on StateError {
+        rethrow;
+      } catch (_) {
+        // Key didn't match this destination — leave it encrypted.
+        continue;
       }
+      if (expectedOnChainAddress != null &&
+          !_addressesMatch(decrypted, expectedOnChainAddress)) {
+        throw _TamperedError();
+      }
+      if (expectedOnChainAddress != null) onChainBound = true;
+      destination.value = decrypted;
+      destination.isEncrypted = false;
+      final id = destination.id;
+      if (id != null) keys.putIfAbsent(id, () => encryptionKey);
+      await _tryDecryptMetadata(payment, destination, encryptionKey);
     }
     return onChainBound;
   }
@@ -248,38 +338,53 @@ class BrantaService implements IBrantaService {
     String keyUsed,
   ) async {
     final encryptedDek = destination.encryptedDek;
-    if (encryptedDek == null || payment.metadata == null || payment.isMetadataDecrypted) return;
+    if (encryptedDek == null ||
+        payment.metadata == null ||
+        payment.isMetadataDecrypted) {
+      return;
+    }
     try {
       final dek = await _aesEncryption.decrypt(encryptedDek, keyUsed);
       payment.metadata = await _aesEncryption.decrypt(payment.metadata!, dek);
       payment.isMetadataDecrypted = true;
+      liftDescriptionFromMetadata(payment);
+    } on StateError {
+      rethrow;
     } catch (_) {
       // DEK decryption failed — leave metadata as-is.
     }
   }
 
-  @override
-  Future<AddPaymentResult> addPaymentAsync(Payment payment, {BrantaClientOptions? options}) async {
-    final privacy = _resolvePrivacy(options);
-    if (privacy == PrivacyMode.strict && payment.destinations.any((d) => !d.isZk)) {
-      throw BrantaPaymentException(
-        'PrivacyMode.Strict requires all destinations to be ZK; one or more destinations have isZk = false.',
-      );
-    }
+  Future<AddPaymentResult> addPayment(
+    Payment payment, {
+    BrantaApiOptions? options,
+  }) async {
+    final submitted = _copyPayment(payment);
+    foldDescriptionIntoMetadata(submitted);
 
     String? dek;
-    if (payment.metadata != null && payment.destinations.any((d) => d.isZk)) {
+    if (submitted.metadata != null && submitted.destinations.isNotEmpty) {
       dek = _secretGenerator.generate();
-      payment.metadata = await _aesEncryption.encrypt(payment.metadata!, dek, deterministicNonce: false);
+      submitted.metadata = await _aesEncryption.encrypt(
+        submitted.metadata!,
+        dek,
+        deterministicNonce: false,
+      );
     }
 
     final secret = _secretGenerator.generate();
     final encryptedToKey = <String, String>{};
 
-    for (final destination in payment.destinations) {
-      if (!destination.isZk) continue;
+    for (final destination in submitted.destinations) {
+      destination.id ??= const Uuid().v4();
 
-      if (destination.type == DestinationType.bitcoinAddress) {
+      final detected =
+          destination.type ?? detectDestinationType(destination.value);
+      if (destination.type == null && detected != null) {
+        destination.type = detected;
+      }
+
+      if (detected == DestinationType.bitcoinAddress) {
         destination.value = await _aesEncryption.encrypt(
           destination.value,
           secret,
@@ -287,60 +392,83 @@ class BrantaService implements IBrantaService {
         );
         encryptedToKey[destination.value] = secret;
         if (dek != null) {
-          destination.encryptedDek = await _aesEncryption.encrypt(dek, secret, deterministicNonce: false);
+          destination.encryptedDek = await _aesEncryption.encrypt(
+            dek,
+            secret,
+            deterministicNonce: false,
+          );
         }
       } else {
-        final hashZkType = destination.value.getHashZkType();
-        if (hashZkType == null) {
+        final derivedType = destination.value.getDerivedKeyType();
+        if (derivedType == null) {
           throw BrantaPaymentException(
-            "destination type '${destination.type}' does not support ZK",
+            "destination type '${destination.type}' cannot be encrypted",
           );
         }
         final normalizedValue = destination.value.toLowerCase();
         final key = normalizedValue.toNormalizedHash();
-        destination.value = await _aesEncryption.encrypt(normalizedValue, key, deterministicNonce: true);
+        destination.value = await _aesEncryption.encrypt(
+          normalizedValue,
+          key,
+          deterministicNonce: true,
+        );
         encryptedToKey[destination.value] = key;
         if (dek != null) {
-          destination.encryptedDek = await _aesEncryption.encrypt(dek, key, deterministicNonce: false);
+          destination.encryptedDek = await _aesEncryption.encrypt(
+            dek,
+            key,
+            deterministicNonce: false,
+          );
         }
       }
     }
 
-    final responsePayment = await _client.postPaymentAsync(payment, options: options);
+    final responsePayment = await _client.postPayment(
+      submitted,
+      options: options,
+    );
     if (responsePayment == null) {
-      throw BrantaPaymentException('No payment returned from server.');
+      throw const BrantaPaymentException('No payment returned from server.');
     }
 
     final keys = <String, String>{};
     for (final d in responsePayment.destinations) {
-      final zkId = d.zkId;
-      if (zkId != null && encryptedToKey.containsKey(d.value)) {
-        keys[zkId] = encryptedToKey[d.value]!;
+      final id = d.id;
+      if (id != null && encryptedToKey.containsKey(d.value)) {
+        keys[id] = encryptedToKey[d.value]!;
       }
     }
 
-    final primaryValue = payment.destinations.isNotEmpty ? payment.destinations.first.value : '';
-    final verifyUrl = _buildVerifyUrl(options, primaryValue, keys);
-
-    return AddPaymentResult(payment: responsePayment, secret: secret, verifyUrl: verifyUrl);
+    final primaryValue = submitted.destinations.isNotEmpty
+        ? submitted.destinations.first.value
+        : '';
+    return AddPaymentResult(
+      payment: responsePayment,
+      secret: secret,
+      verifyUrl: _buildVerifyUrl(options, primaryValue, keys),
+    );
   }
 
-  @override
-  Future<bool> isApiKeyValidAsync({BrantaClientOptions? options}) {
-    return _client.isApiKeyValidAsync(options: options);
+  Future<bool> isApiKeyValid({BrantaApiOptions? options}) {
+    return _client.isApiKeyValid(options: options);
   }
 
-  String _buildVerifyUrl(BrantaClientOptions? options, String paymentLookup, [Map<String, String>? keys]) {
-    final baseUrl = (options?.baseUrl ?? _defaultOptions.baseUrl).url;
-    final encoded = Uri.encodeComponent(paymentLookup);
-    var url = '$baseUrl/v2/verify/$encoded';
-    if (keys != null && keys.isNotEmpty) {
-      url += keys.toUrlFragment();
+  String _resolveBaseUrl(BrantaApiOptions? options) {
+    final environment = options?.environment ?? _defaultOptions.environment;
+    if (environment == null) {
+      throw StateError('Branta: environment is a required option.');
     }
-    return url;
+    return environment.url;
   }
 
-  PrivacyMode _resolvePrivacy(BrantaClientOptions? options) {
-    return options?.privacy ?? _defaultOptions.privacy;
+  String _buildVerifyUrl(
+    BrantaApiOptions? options,
+    String paymentLookup, [
+    Map<String, String>? keys,
+  ]) {
+    final baseUrl = _resolveBaseUrl(options);
+    var url = '$baseUrl/v2/verify/${encodeUriComponent(paymentLookup)}';
+    if (keys != null && keys.isNotEmpty) url += keys.toUrlFragment();
+    return url;
   }
 }

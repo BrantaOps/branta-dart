@@ -1,8 +1,11 @@
-import '../../classes/branta_client_options.dart';
+import '../../classes/branta_api_options.dart';
 import '../models/payment.dart';
 
 abstract class IBrantaClient {
-  Future<List<Payment>> getPaymentsAsync(String destinationValue, {BrantaClientOptions? options});
-  Future<Payment?> postPaymentAsync(Payment payment, {BrantaClientOptions? options});
-  Future<bool> isApiKeyValidAsync({BrantaClientOptions? options});
+  Future<List<Payment>> getPayments(
+    String destinationValue, {
+    BrantaApiOptions? options,
+  });
+  Future<Payment?> postPayment(Payment payment, {BrantaApiOptions? options});
+  Future<bool> isApiKeyValid({BrantaApiOptions? options});
 }

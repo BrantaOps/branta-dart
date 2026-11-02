@@ -1,3 +1,10 @@
+## 4.0.0
+
+- Breaking: `verify` replaces `getPaymentsAsync` and `getPaymentsByQrCodeAsync`. It returns `match`, `unknown`, `tampered`, or `incomplete`. A swapped address is `tampered`. A 404, a bare address, and a bolt11 / Ark / silent-payment lookup that does not decrypt are `unknown`. 5xx, 429, and no network are `incomplete`.
+- Breaking: removed `PrivacyMode`. Every destination is encrypted. `BrantaClientOptions` and `BrantaServerBaseUrl` are now `BrantaApiOptions` and `BrantaEnvironment`.
+- Breaking: `Destination.id` is the public name for the wire field `zk_id`. `addPayment` encrypts a copy and leaves the caller's `Payment` unchanged. Description is stored in encrypted metadata. An unset TTL is omitted. `DestinationType` is `bitcoin_address`, `bolt11`, `ark_address`, and `silent_payment`.
+- The public library no longer exports the HTTP client, QR parser, AES helpers, or `QRParseException`.
+
 ## 3.2.4
 
 - Fixed: `getPaymentsByQrCodeAsync` now requires every payment instruction in a scanned QR code to match a decrypted destination. A swapped address with a rewritten `branta_secret`, an added lightning/ark/silent-payment leg that does not match the registered record, or a conflicting `bc=`/`tb=` address no longer comes back as verified. QR codes carrying `bolt12`, `lno=`, `pay=`, or LNURL instructions return no payments (ported from `branta-js`)

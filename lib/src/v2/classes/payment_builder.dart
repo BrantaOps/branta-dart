@@ -8,39 +8,28 @@ import '../models/platform.dart';
 class PaymentBuilder {
   final Payment _payment = Payment(destinations: []);
 
-  PaymentBuilder addDestination(String address, {DestinationType? type}) {
-    _payment.destinations.add(Destination(
-      value: address,
-      type: type,
-      isZk: false,
-    ));
-    return this;
-  }
-
-  PaymentBuilder setZk() {
-    if (_payment.destinations.isNotEmpty) {
-      final destination = _payment.destinations.last;
-      destination.isZk = true;
-      destination.zkId = const Uuid().v4();
-    }
+  PaymentBuilder addDestination(String value, {DestinationType? type}) {
+    _payment.destinations.add(
+      Destination(value: value, type: type, id: const Uuid().v4()),
+    );
     return this;
   }
 
   PaymentBuilder setDescription(String description) {
-    _payment.description = description;
-    return this;
+    return addMetadata('description', description);
   }
 
   PaymentBuilder addMetadata(String key, String value) {
     final existing = _payment.metadata;
     final map = existing != null && existing.isNotEmpty
-        ? (jsonDecode(existing) as Map<String, dynamic>)
+        ? Map<String, dynamic>.from(jsonDecode(existing) as Map)
         : <String, dynamic>{};
     map[key] = value;
     _payment.metadata = jsonEncode(map);
     return this;
   }
 
+  /// Time to live in seconds.
   PaymentBuilder setTtl(int ttl) {
     _payment.ttl = ttl;
     return this;
@@ -51,8 +40,16 @@ class PaymentBuilder {
     return this;
   }
 
-  PaymentBuilder setChildPlatform(String name, {String? logoUrl, String? logoLightUrl}) {
-    _payment.childPlatform = Platform(name: name, logoUrl: logoUrl, logoLightUrl: logoLightUrl);
+  PaymentBuilder setChildPlatform(
+    String name, {
+    String? logoUrl,
+    String? logoLightUrl,
+  }) {
+    _payment.childPlatform = Platform(
+      name: name,
+      logoUrl: logoUrl,
+      logoLightUrl: logoLightUrl,
+    );
     return this;
   }
 
