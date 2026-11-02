@@ -1,4 +1,4 @@
-import '../../../src/enums/destination_type.dart';
+import '../enums/destination_type.dart';
 
 class Destination {
   String value;

@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
-import '../../classes/branta_api_options.dart';
-import '../../exceptions/branta_payment_exception.dart';
-import '../../exceptions/incomplete_error.dart';
-import '../../helpers/branta_extensions.dart';
+import '../classes/branta_api_options.dart';
+import '../exceptions/branta_payment_exception.dart';
+import '../exceptions/incomplete_error.dart';
+import '../helpers/branta_extensions.dart';
 import '../interfaces/i_branta_client.dart';
 import '../models/payment.dart';
 

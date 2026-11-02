@@ -1,4 +1,4 @@
-import '../../helpers/aes_encryption.dart';
+import '../helpers/aes_encryption.dart';
 import '../interfaces/i_aes_encryption.dart';
 
 class AesEncryptionService implements IAesEncryption {

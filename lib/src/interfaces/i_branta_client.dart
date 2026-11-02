@@ -1,4 +1,4 @@
-import '../../classes/branta_api_options.dart';
+import '../classes/branta_api_options.dart';
 import '../models/payment.dart';
 
 abstract class IBrantaClient {

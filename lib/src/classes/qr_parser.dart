@@ -1,5 +1,5 @@
-import '../../enums/destination_type.dart';
-import '../../helpers/branta_extensions.dart';
+import '../enums/destination_type.dart';
+import '../helpers/branta_extensions.dart';
 
 class QrDestination {
   final String value;

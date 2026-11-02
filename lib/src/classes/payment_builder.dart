@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
-import '../../enums/destination_type.dart';
+import '../enums/destination_type.dart';
 import '../models/destination.dart';
 import '../models/payment.dart';
 import '../models/platform.dart';

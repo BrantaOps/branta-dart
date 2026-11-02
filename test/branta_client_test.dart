@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:branta/branta.dart';
 import 'package:branta/src/exceptions/incomplete_error.dart';
-import 'package:branta/src/v2/services/branta_client.dart';
+import 'package:branta/src/services/branta_client.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';

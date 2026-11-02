@@ -1,11 +1,11 @@
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
-import '../../classes/branta_api_options.dart';
-import '../../enums/branta_environment.dart';
-import '../../enums/destination_type.dart';
-import '../../exceptions/branta_payment_exception.dart';
-import '../../exceptions/incomplete_error.dart';
-import '../../helpers/branta_extensions.dart';
+import '../classes/branta_api_options.dart';
+import '../enums/branta_environment.dart';
+import '../enums/destination_type.dart';
+import '../exceptions/branta_payment_exception.dart';
+import '../exceptions/incomplete_error.dart';
+import '../helpers/branta_extensions.dart';
 import '../classes/guid_secret_generator.dart';
 import '../classes/qr_parser.dart';
 import '../classes/aes_encryption_service.dart';

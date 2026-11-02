@@ -2,10 +2,10 @@ import 'package:branta/branta.dart';
 import 'package:branta/src/exceptions/incomplete_error.dart';
 import 'package:branta/src/helpers/aes_encryption.dart';
 import 'package:branta/src/helpers/branta_extensions.dart';
-import 'package:branta/src/v2/classes/qr_parser.dart';
-import 'package:branta/src/v2/interfaces/i_aes_encryption.dart';
-import 'package:branta/src/v2/interfaces/i_branta_client.dart';
-import 'package:branta/src/v2/interfaces/i_secret_generator.dart';
+import 'package:branta/src/classes/qr_parser.dart';
+import 'package:branta/src/interfaces/i_aes_encryption.dart';
+import 'package:branta/src/interfaces/i_branta_client.dart';
+import 'package:branta/src/interfaces/i_secret_generator.dart';
 import 'package:test/test.dart';
 
 class ClientCall {
