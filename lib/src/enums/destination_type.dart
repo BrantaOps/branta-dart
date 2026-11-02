@@ -1,10 +1,6 @@
 enum DestinationType {
   bitcoinAddress('bitcoin_address'),
   bolt11('bolt11'),
-  bolt12('bolt12'),
-  lnUrl('ln_url'),
-  tetherAddress('tether_address'),
-  lnAddress('ln_address'),
   arkAddress('ark_address'),
   silentPayment('silent_payment');
 

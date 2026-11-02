@@ -4,10 +4,16 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart' hide Hmac;
 
-class AesEncryption {
-  static Future<String> encrypt(String value, String secret, {bool deterministicNonce = false}) async {
+class AesGcmCipher {
+  static Future<String> encrypt(
+    String value,
+    String secret, {
+    bool deterministicNonce = false,
+  }) async {
     try {
-      final keyData = Uint8List.fromList(sha256.convert(utf8.encode(secret)).bytes);
+      final keyData = Uint8List.fromList(
+        sha256.convert(utf8.encode(secret)).bytes,
+      );
 
       final iv = Uint8List(12);
       if (!deterministicNonce) {
@@ -47,7 +53,9 @@ class AesEncryption {
 
   static Future<String> decrypt(String encryptedValue, String secret) async {
     try {
-      final keyData = Uint8List.fromList(sha256.convert(utf8.encode(secret)).bytes);
+      final keyData = Uint8List.fromList(
+        sha256.convert(utf8.encode(secret)).bytes,
+      );
       final encryptedBytes = base64.decode(encryptedValue);
 
       if (encryptedBytes.length < 28) {
@@ -62,7 +70,10 @@ class AesEncryption {
       final secretKey = SecretKey(keyData);
       final secretBox = SecretBox(ciphertext, nonce: iv, mac: Mac(tag));
 
-      final decryptedBytes = await algorithm.decrypt(secretBox, secretKey: secretKey);
+      final decryptedBytes = await algorithm.decrypt(
+        secretBox,
+        secretKey: secretKey,
+      );
       return utf8.decode(decryptedBytes);
     } on ArgumentError {
       rethrow;
