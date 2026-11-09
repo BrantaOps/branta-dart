@@ -51,6 +51,8 @@ Map<String, String> parseQueryString(String query) {
       final key = Uri.decodeComponent(rawKey).toLowerCase();
       final value = Uri.decodeComponent(rawValue);
       result.putIfAbsent(key, () => value);
+    } on ArgumentError {
+      // Uri.decodeComponent throws ArgumentError for bad % escapes.
     } on FormatException {
       // skip malformed parameter
     }

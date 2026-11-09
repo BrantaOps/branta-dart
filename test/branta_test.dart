@@ -377,6 +377,23 @@ void main() {
       expect(parser.destinations[1].type, equals(DestinationType.bolt11));
     });
 
+    test('skips malformed percent-encoded query params', () {
+      final badSecret = QRParser(
+        'bitcoin:$_bitcoinAddress?branta_id=ID1&branta_secret=%ZZ',
+      );
+      expect(badSecret.onChainEncryptionText, equals('ID1'));
+      expect(badSecret.onChainEncryptionSecret, isNull);
+      expect(badSecret.hasBrantaParams(), isFalse);
+
+      // Truncated escape on an unrelated param must not drop branta_*.
+      final truncatedAmount = QRParser(
+        'bitcoin:$_bitcoinAddress?branta_id=ID1&branta_secret=SEC1&amount=1%',
+      );
+      expect(truncatedAmount.onChainEncryptionText, equals('ID1'));
+      expect(truncatedAmount.onChainEncryptionSecret, equals('SEC1'));
+      expect(truncatedAmount.hasBrantaParams(), isTrue);
+    });
+
     test('plain bitcoin, bolt11, ark, and silent payment set their types', () {
       expect(
         QRParser(_bitcoinAddress).destinationType,
