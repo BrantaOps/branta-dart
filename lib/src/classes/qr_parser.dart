@@ -70,6 +70,7 @@ bool _startsWithI(String value, String prefix) =>
 
 DestinationType? _getDestinationType(String text) {
   if (_startsWithI(text, 'bitcoin:')) return DestinationType.bitcoinAddress;
+  if (_startsWithI(text, 'pol:')) return DestinationType.usdtPolygon;
   if (_startsWithI(text, 'lightning:')) {
     final dest = _getDestination(text);
     if (dest != null && dest.isBolt11()) return DestinationType.bolt11;
@@ -102,6 +103,17 @@ class QRParser {
     }
 
     final scheme = uri.scheme.toLowerCase();
+    if (scheme == 'pol') {
+      final dest = _getDestination(text);
+      if (dest != null) {
+        destinations.add(QrDestination(dest, DestinationType.usdtPolygon));
+      }
+      final queryParams = parseQueryString(_queryFromText(text));
+      onChainEncryptionText = queryParams['branta_id'];
+      onChainEncryptionSecret = queryParams['branta_secret'];
+      return;
+    }
+
     if (scheme == 'bitcoin' || scheme == 'lightning') {
       final dest = _getDestination(text);
       if (dest != null) {

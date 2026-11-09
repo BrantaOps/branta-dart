@@ -1,3 +1,8 @@
+## Unreleased
+
+- Added: `DestinationType.usdtPolygon` for Polygon USDT. `addPayment` encrypts the recipient with a random secret (same pattern as bitcoin). `verify()` parses `pol:` URIs with `branta_id` / `branta_secret`; other query params (`value`, `currency`, `user`) are ignored for binding. A bare `0x` address is `unknown`. EVM address compare is case-insensitive.
+- Fixed: `verify()` swap-checks only the secret-key rail that matches the QR type, so a payment with both bitcoin and `usdt_polygon` no longer returns `tampered` for a valid single-rail QR.
+
 ## 4.0.1
 
 - Fixed: malformed percent-encoded QR query params (`%ZZ`, truncated `1%`) no longer throw `ArgumentError` out of `verify()`; bad params are skipped as intended

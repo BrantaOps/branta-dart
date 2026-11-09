@@ -69,25 +69,32 @@ bool _addressesMatch(String a, String b) {
   bool isBech32(String v) =>
       RegExp(r'^(bc|tb|bcrt)1', caseSensitive: false).hasMatch(v);
   if (isBech32(a) && isBech32(b)) return a.toLowerCase() == b.toLowerCase();
+  if (a.startsWith('0x') && b.startsWith('0x')) {
+    return a.toLowerCase() == b.toLowerCase();
+  }
   return a == b;
 }
 
-/// The single on-chain address every on-chain instruction agrees on, or null if there is none.
+Iterable<QrDestination> _secretKeyDestinations(QRParser parser) =>
+    parser.destinations.where(
+      (d) => d.type != null && d.type!.isSecretKeyAddress && d.value.trim().isNotEmpty,
+    );
+
+/// The single secret-key address every such instruction agrees on, or null if there is none.
 String? _uniformOnChainAddress(QRParser parser) {
-  final addresses = parser.destinations
-      .where(
-        (d) =>
-            d.type == DestinationType.bitcoinAddress &&
-            d.value.trim().isNotEmpty,
-      )
-      .map((d) => d.value)
-      .toList();
+  final addresses = _secretKeyDestinations(parser).map((d) => d.value).toList();
   if (addresses.isEmpty) return null;
   final first = addresses.first;
   for (final address in addresses.skip(1)) {
     if (!_addressesMatch(first, address)) throw _TamperedError();
   }
   return first;
+}
+
+/// Rail type for that visible address — swap-check only this type on the payment record.
+DestinationType? _expectedSecretKeyType(QRParser parser) {
+  final destinations = _secretKeyDestinations(parser);
+  return destinations.isEmpty ? null : destinations.first.type;
 }
 
 class BrantaService {
@@ -161,6 +168,7 @@ class BrantaService {
           parser.onChainEncryptionSecret,
           additionalValues,
           expectedOnChainAddress,
+          _expectedSecretKeyType(parser),
           options: options,
         );
         return _toVerifyResult(lookedUp.payments, lookedUp.verifyUrl);
@@ -193,7 +201,8 @@ class BrantaService {
     String lookupValue,
     String? encryptionKey,
     List<String> additionalHashValues,
-    String? expectedOnChainAddress, {
+    String? expectedOnChainAddress,
+    DestinationType? expectedOnChainType, {
     BrantaApiOptions? options,
   }) async {
     final payments = await _client.getPayments(lookupValue, options: options);
@@ -206,6 +215,7 @@ class BrantaService {
         encryptionKey,
         keys,
         expectedOnChainAddress: expectedOnChainAddress,
+        expectedOnChainType: expectedOnChainType,
       );
       var hashesBound = true;
       for (final value in additionalHashValues) {
@@ -300,11 +310,15 @@ class BrantaService {
     String? encryptionKey,
     Map<String, String> keys, {
     String? expectedOnChainAddress,
+    DestinationType? expectedOnChainType,
   }) async {
     var onChainBound = expectedOnChainAddress == null;
     for (final destination in payment.destinations) {
       if (!destination.isEncrypted) continue;
-      if (destination.type != DestinationType.bitcoinAddress) continue;
+      final type = destination.type;
+      if (type == null || !type.isSecretKeyAddress) continue;
+      // Other secret-key rails on the same payment are not part of this QR's swap check.
+      if (expectedOnChainType != null && type != expectedOnChainType) continue;
       if (encryptionKey == null) continue;
       String decrypted;
       try {
@@ -384,7 +398,7 @@ class BrantaService {
         destination.type = detected;
       }
 
-      if (detected == DestinationType.bitcoinAddress) {
+      if (detected != null && detected.isSecretKeyAddress) {
         destination.value = await _aesEncryption.encrypt(
           destination.value,
           secret,

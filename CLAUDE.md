@@ -18,5 +18,5 @@ Public API is whatever `lib/branta.dart` exports: `BrantaService`, `PaymentBuild
 
 - `lib/src/services/branta_service.dart` orchestrates encrypt/decrypt around HTTP. `branta_client.dart` is the raw HTTP layer. Do not export it.
 - `verify` is the only lookup. A raw on-chain address is `unknown` and does not GET. `addPayment` encrypts a copy.
-- `DestinationType` is only what `addPayment` accepts: `bitcoin_address`, `bolt11`, `ark_address`, `silent_payment`.
+- `DestinationType` is only what `addPayment` accepts: `bitcoin_address`, `bolt11`, `ark_address`, `silent_payment`, `usdt_polygon`. Polygon USDT uses a `pol:` URI with `branta_id` / `branta_secret` (same secret-key pattern as bitcoin). A bare `0x` address is `unknown`.
 - `tampered` and `incomplete` are statuses. Do not throw them. Logo-domain mismatches still throw `BrantaPaymentException`.
