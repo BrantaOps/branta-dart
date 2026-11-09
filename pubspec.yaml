@@ -1,6 +1,6 @@
 name: branta
 description: A Branta SDK for Dart.
-version: 4.0.0
+version: 4.0.1
 repository: https://github.com/BrantaOps/branta-dart
 
 environment:

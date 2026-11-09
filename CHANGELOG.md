@@ -1,3 +1,7 @@
+## 4.0.1
+
+- Fixed: malformed percent-encoded QR query params (`%ZZ`, truncated `1%`) no longer throw `ArgumentError` out of `verify()`; bad params are skipped as intended
+
 ## 4.0.0
 
 - Breaking: `verify` replaces `getPaymentsAsync` and `getPaymentsByQrCodeAsync`. It returns `match`, `unknown`, `tampered`, or `incomplete`. A swapped address is `tampered`. A 404, a bare address, and a bolt11 / Ark / silent-payment lookup that does not decrypt are `unknown`. 5xx, 429, and no network are `incomplete`.
