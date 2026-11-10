@@ -1,7 +1,11 @@
 ## Unreleased
 
 - Added: `DestinationType.usdtPolygon` for Polygon USDT. `addPayment` encrypts the recipient with a random secret (same pattern as bitcoin). `verify()` parses `pol:` URIs with `branta_id` / `branta_secret`; other query params (`value`, `currency`, `user`) are ignored for binding. A bare `0x` address is `unknown`. EVM address compare is case-insensitive.
-- Fixed: `verify()` swap-checks only the secret-key rail that matches the QR type, so a payment with both bitcoin and `usdt_polygon` no longer returns `tampered` for a valid single-rail QR.
+- Added: `DestinationType.usdcPolygon` for Polygon USDC. Same secret-key encrypt / `pol:` verify path as `usdt_polygon`. Token is the destination type on the payment; `pol:` remains the Polygon EVM scheme for both.
+- Added: `verify()` `match` includes `matchedDestinations`: the rails this scan bound (plaintext + `type`). Wallets should send from that list instead of filtering `payments[].destinations`.
+- Changed: `polygonEvmDestinationTypes` is `{usdt_polygon, usdc_polygon}`. `verify()` of a `pol:` URI binds any family member whose decrypted address matches (match-if-any).
+- Changed: `pol:` parsing no longer stamps a token `DestinationType` on the QR address. The scheme maps to the Polygon EVM family for verify; the token still comes from the matched payment destination.
+- Fixed: `verify()` swap-checks only the secret-key rail family for the QR scheme, so a payment with both bitcoin and a Polygon rail no longer returns `tampered` for a valid single-rail QR.
 
 ## 4.0.1
 

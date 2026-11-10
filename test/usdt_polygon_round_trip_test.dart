@@ -73,12 +73,13 @@ void main() {
 
         final match = await service.verify(polUri(address, encrypted, secret));
         expect(match.status, equals(VerifyStatus.match));
+        expect(match.matchedDestinations, hasLength(1));
         expect(
-          match.payments.single.destinations.single.type,
+          match.matchedDestinations.single.type,
           equals(DestinationType.usdtPolygon),
         );
         expect(
-          match.payments.single.destinations.single.value.toLowerCase(),
+          match.matchedDestinations.single.value.toLowerCase(),
           equals(address.toLowerCase()),
         );
 

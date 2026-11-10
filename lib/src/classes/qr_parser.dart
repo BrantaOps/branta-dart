@@ -3,8 +3,15 @@ import '../helpers/branta_extensions.dart';
 
 class QrDestination {
   final String value;
+
+  /// Known rail type when the scheme or payload names one (e.g. bitcoin).
+  /// Not set for `pol:` — token comes from the matched payment destination.
   final DestinationType? type;
-  const QrDestination(this.value, this.type);
+
+  /// True when this instruction is a secret-key address rail for verify.
+  final bool secretKey;
+
+  const QrDestination(this.value, this.type, {this.secretKey = false});
 }
 
 String normalizeQrText(String qrText) {
@@ -70,7 +77,6 @@ bool _startsWithI(String value, String prefix) =>
 
 DestinationType? _getDestinationType(String text) {
   if (_startsWithI(text, 'bitcoin:')) return DestinationType.bitcoinAddress;
-  if (_startsWithI(text, 'pol:')) return DestinationType.usdtPolygon;
   if (_startsWithI(text, 'lightning:')) {
     final dest = _getDestination(text);
     if (dest != null && dest.isBolt11()) return DestinationType.bolt11;
@@ -90,6 +96,10 @@ class QRParser {
   String? onChainEncryptionText;
   String? onChainEncryptionSecret;
 
+  /// Destination types `verify` may bind for this QR's scheme (match-if-any).
+  /// Set from the URI scheme — not from a token stamped on the address.
+  List<DestinationType>? expectedSecretKeyTypes;
+
   /// A payable instruction this SDK cannot bind to a decrypted destination.
   bool hasUnverifiableInstruction = false;
 
@@ -106,7 +116,9 @@ class QRParser {
     if (scheme == 'pol') {
       final dest = _getDestination(text);
       if (dest != null) {
-        destinations.add(QrDestination(dest, DestinationType.usdtPolygon));
+        // Address only — token comes from the matched payment destination after verify.
+        destinations.add(QrDestination(dest, null, secretKey: true));
+        expectedSecretKeyTypes = List.of(polygonEvmDestinationTypes);
       }
       final queryParams = parseQueryString(_queryFromText(text));
       onChainEncryptionText = queryParams['branta_id'];
@@ -118,7 +130,13 @@ class QRParser {
       final dest = _getDestination(text);
       if (dest != null) {
         final destType = _getDestinationType(text);
-        destinations.add(QrDestination(dest, destType));
+        destinations.add(
+          QrDestination(
+            dest,
+            destType,
+            secretKey: destType == DestinationType.bitcoinAddress,
+          ),
+        );
         if (dest.isNotEmpty &&
             destType != DestinationType.bitcoinAddress &&
             dest.getDerivedKeyType() == null) {
@@ -140,7 +158,7 @@ class QRParser {
           hasUnverifiableInstruction = true;
           return;
         }
-        destinations.add(QrDestination(value, type));
+        destinations.add(QrDestination(value, type, secretKey: onChain));
       }
 
       addBindable(
@@ -176,6 +194,10 @@ class QRParser {
       if (queryParams.containsKey('bolt12')) hasUnverifiableInstruction = true;
       if (queryParams.containsKey('lno')) hasUnverifiableInstruction = true;
       if (queryParams.containsKey('pay')) hasUnverifiableInstruction = true;
+
+      if (destinations.any((d) => d.secretKey)) {
+        expectedSecretKeyTypes = [DestinationType.bitcoinAddress];
+      }
       return;
     }
 

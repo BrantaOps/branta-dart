@@ -26,6 +26,8 @@ final result = await service.verify(input); // scanned QR or pasted text
 switch (result.status) {
   case VerifyStatus.match:
     // Show the card for result.payments.first. Link it to result.verifyUrl.
+    // What to send is result.matchedDestinations — each has type + plaintext value.
+    // e.g. usdt_polygon / usdc_polygon / bitcoin_address / bolt11. Do not infer token from pol:.
     break;
   case VerifyStatus.unknown:
     // Not in Branta — show nothing.
@@ -39,7 +41,7 @@ switch (result.status) {
 }
 ```
 
-On-chain Bitcoin needs a `bitcoin:` URI with `branta_id` / `branta_secret`. Polygon USDT needs a `pol:` URI with the same params. bolt11, Ark, and silent payments resolve from the value. A bare address (including bare `0x`) is `unknown`.
+On-chain Bitcoin needs a `bitcoin:` URI with `branta_id` / `branta_secret`. Polygon EVM rails (`usdt_polygon`, `usdc_polygon`) need a `pol:` URI with the same params — token is on `matchedDestinations[].type`, not the `pol:` scheme. bolt11, Ark, and silent payments resolve from the value. A bare address (including bare `0x`) is `unknown`.
 
 A 404 is `unknown`. 5xx, 429, or no network is `incomplete`. `verifyUrl` is always returned.
 
