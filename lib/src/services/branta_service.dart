@@ -21,12 +21,19 @@ import 'http_branta_client.dart';
 
 class _TamperedError implements Exception {}
 
+List<Destination> _matchedDestinationsFrom(List<Payment> payments) => [
+  for (final payment in payments)
+    for (final destination in payment.destinations)
+      if (!destination.isEncrypted) destination,
+];
+
 VerifyResult _toVerifyResult(List<Payment> payments, String verifyUrl) =>
     payments.isEmpty
     ? VerifyResult(status: VerifyStatus.unknown, verifyUrl: verifyUrl)
     : VerifyResult(
         status: VerifyStatus.match,
         payments: payments,
+        matchedDestinations: _matchedDestinationsFrom(payments),
         verifyUrl: verifyUrl,
       );
 
@@ -69,25 +76,33 @@ bool _addressesMatch(String a, String b) {
   bool isBech32(String v) =>
       RegExp(r'^(bc|tb|bcrt)1', caseSensitive: false).hasMatch(v);
   if (isBech32(a) && isBech32(b)) return a.toLowerCase() == b.toLowerCase();
+  if (a.startsWith('0x') && b.startsWith('0x')) {
+    return a.toLowerCase() == b.toLowerCase();
+  }
   return a == b;
 }
 
-/// The single on-chain address every on-chain instruction agrees on, or null if there is none.
+Iterable<QrDestination> _secretKeyDestinations(QRParser parser) =>
+    parser.destinations.where(
+      (d) => d.secretKey && d.value.trim().isNotEmpty,
+    );
+
+/// The single secret-key address every such instruction agrees on, or null if there is none.
 String? _uniformOnChainAddress(QRParser parser) {
-  final addresses = parser.destinations
-      .where(
-        (d) =>
-            d.type == DestinationType.bitcoinAddress &&
-            d.value.trim().isNotEmpty,
-      )
-      .map((d) => d.value)
-      .toList();
+  final addresses = _secretKeyDestinations(parser).map((d) => d.value).toList();
   if (addresses.isEmpty) return null;
   final first = addresses.first;
   for (final address in addresses.skip(1)) {
     if (!_addressesMatch(first, address)) throw _TamperedError();
   }
   return first;
+}
+
+/// Scheme → rail family from the parser (match-if-any within the set).
+Set<DestinationType>? _expectedSecretKeyTypes(QRParser parser) {
+  final types = parser.expectedSecretKeyTypes;
+  if (types == null || types.isEmpty) return null;
+  return types.toSet();
 }
 
 class BrantaService {
@@ -161,6 +176,7 @@ class BrantaService {
           parser.onChainEncryptionSecret,
           additionalValues,
           expectedOnChainAddress,
+          _expectedSecretKeyTypes(parser),
           options: options,
         );
         return _toVerifyResult(lookedUp.payments, lookedUp.verifyUrl);
@@ -193,7 +209,8 @@ class BrantaService {
     String lookupValue,
     String? encryptionKey,
     List<String> additionalHashValues,
-    String? expectedOnChainAddress, {
+    String? expectedOnChainAddress,
+    Set<DestinationType>? expectedOnChainTypes, {
     BrantaApiOptions? options,
   }) async {
     final payments = await _client.getPayments(lookupValue, options: options);
@@ -206,6 +223,7 @@ class BrantaService {
         encryptionKey,
         keys,
         expectedOnChainAddress: expectedOnChainAddress,
+        expectedOnChainTypes: expectedOnChainTypes,
       );
       var hashesBound = true;
       for (final value in additionalHashValues) {
@@ -300,11 +318,18 @@ class BrantaService {
     String? encryptionKey,
     Map<String, String> keys, {
     String? expectedOnChainAddress,
+    Set<DestinationType>? expectedOnChainTypes,
   }) async {
     var onChainBound = expectedOnChainAddress == null;
+    var decryptedExpectedRail = false;
     for (final destination in payment.destinations) {
       if (!destination.isEncrypted) continue;
-      if (destination.type != DestinationType.bitcoinAddress) continue;
+      final type = destination.type;
+      if (type == null || !type.isSecretKeyAddress) continue;
+      // Outside this QR's rail family (e.g. bitcoin when scanning pol:) — leave encrypted.
+      if (expectedOnChainTypes != null && !expectedOnChainTypes.contains(type)) {
+        continue;
+      }
       if (encryptionKey == null) continue;
       String decrypted;
       try {
@@ -318,9 +343,11 @@ class BrantaService {
         // Key didn't match this destination — leave it encrypted.
         continue;
       }
+      decryptedExpectedRail = true;
+      // Match-if-any within the family: a sibling rail with a different address stays encrypted.
       if (expectedOnChainAddress != null &&
           !_addressesMatch(decrypted, expectedOnChainAddress)) {
-        throw _TamperedError();
+        continue;
       }
       if (expectedOnChainAddress != null) onChainBound = true;
       destination.value = decrypted;
@@ -328,6 +355,12 @@ class BrantaService {
       final id = destination.id;
       if (id != null) keys.putIfAbsent(id, () => encryptionKey);
       await _tryDecryptMetadata(payment, destination, encryptionKey);
+    }
+    // Tampered only when a family rail decrypted and none matched the scanned address.
+    if (expectedOnChainAddress != null &&
+        !onChainBound &&
+        decryptedExpectedRail) {
+      throw _TamperedError();
     }
     return onChainBound;
   }
@@ -384,7 +417,7 @@ class BrantaService {
         destination.type = detected;
       }
 
-      if (detected == DestinationType.bitcoinAddress) {
+      if (detected != null && detected.isSecretKeyAddress) {
         destination.value = await _aesEncryption.encrypt(
           destination.value,
           secret,

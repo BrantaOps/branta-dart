@@ -182,12 +182,31 @@ const String _bitcoinAddress = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
 const String _swappedAddress = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
 const String _encryptedBitcoinAddress = 'encrypted-bitcoin-address';
 const String _secret = 'test-secret';
+const String _usdtPolygonAddress = '0x278297528c32eCa01295B0d2135984d3442ec963';
+const String _usdtPolygonAddressLower = '0x278297528c32eca01295b0d2135984d3442ec963';
+const String _usdcPolygonAddress = '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B';
+const String _swappedUsdtPolygonAddress =
+    '0x1111111111111111111111111111111111111111';
+const String _encryptedUsdtPolygonAddress = 'encrypted-usdt-polygon-address';
+const String _encryptedUsdcPolygonAddress = 'encrypted-usdc-polygon-address';
 const String _bolt11Invoice = 'lnbc100n1ptest';
 const String _encryptedBolt11 = 'encrypted-bolt11-value';
 const String _arkAddress = 'ark100testaddress';
 const String _encryptedArkAddress = 'encrypted-ark-address';
 const String _registeredBech32 = 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq';
 const String _encryptedBech32 = 'encrypted-bech32-address';
+
+String _brantaUsdtPolygonLookup([
+  String address = _usdtPolygonAddress,
+  String secret = _secret,
+]) =>
+    'pol:$address?value=50&user=send&currency=USD&branta_id=${Uri.encodeComponent(_encryptedUsdtPolygonAddress)}&branta_secret=${Uri.encodeComponent(secret)}';
+
+String _brantaUsdcPolygonLookup([
+  String address = _usdcPolygonAddress,
+  String secret = _secret,
+]) =>
+    'pol:$address?value=50&user=send&currency=USD&branta_id=${Uri.encodeComponent(_encryptedUsdcPolygonAddress)}&branta_secret=${Uri.encodeComponent(secret)}';
 
 final String _bolt11Hash = _bolt11Invoice.toNormalizedHash();
 final String _arkHash = _arkAddress.toNormalizedHash();
@@ -224,6 +243,16 @@ BrantaService _makeService(
 void _setupDefaultMocks(MockAesEncryption aes) {
   aes.setupDecryptResult(_encryptedBitcoinAddress, _secret, _bitcoinAddress);
   aes.setupDecryptResult(_encryptedBech32, _secret, _registeredBech32);
+  aes.setupDecryptResult(
+    _encryptedUsdtPolygonAddress,
+    _secret,
+    _usdtPolygonAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdcPolygonAddress,
+    _secret,
+    _usdcPolygonAddress,
+  );
   aes.setupEncrypt(
     _bolt11Invoice,
     _bolt11Hash,
@@ -232,6 +261,16 @@ void _setupDefaultMocks(MockAesEncryption aes) {
   );
   aes.setupDecryptResult(_encryptedBolt11, _bolt11Hash, _bolt11Invoice);
   aes.setupEncrypt(_bitcoinAddress, _secret, _encryptedBitcoinAddress);
+  aes.setupEncrypt(
+    _usdtPolygonAddress,
+    _secret,
+    _encryptedUsdtPolygonAddress,
+  );
+  aes.setupEncrypt(
+    _usdcPolygonAddress,
+    _secret,
+    _encryptedUsdcPolygonAddress,
+  );
   aes.setupEncrypt(
     _arkAddress,
     _arkHash,
@@ -367,6 +406,32 @@ void main() {
       expect(parser.hasBrantaParams(), isTrue);
       expect(parser.onChainEncryptionText, equals('ID1'));
       expect(parser.onChainEncryptionSecret, equals('SEC1'));
+    });
+
+    test('pol URI is address-only and maps to the Polygon EVM family', () {
+      final parser = QRParser(
+        'pol:$_usdtPolygonAddress?value=50&user=send&currency=USD&branta_id=abc%2Bdef%3D&branta_secret=1234',
+      );
+      expect(parser.destination, equals(_usdtPolygonAddress));
+      expect(parser.destinationType, isNull);
+      expect(parser.destinations.single.secretKey, isTrue);
+      expect(
+        parser.expectedSecretKeyTypes,
+        equals(polygonEvmDestinationTypes),
+      );      expect(parser.destinations, hasLength(1));
+      expect(parser.onChainEncryptionText, equals('abc+def='));
+      expect(parser.onChainEncryptionSecret, equals('1234'));
+    });
+
+    test('pol URI without query still maps to the Polygon EVM family', () {
+      final parser = QRParser('pol:$_usdtPolygonAddress');
+      expect(parser.destination, equals(_usdtPolygonAddress));
+      expect(parser.destinationType, isNull);
+      expect(
+        parser.expectedSecretKeyTypes,
+        equals(polygonEvmDestinationTypes),
+      );      expect(parser.onChainEncryptionText, isNull);
+      expect(parser.onChainEncryptionSecret, isNull);
     });
 
     test('bitcoin URI decodes a URI-encoded lightning param', () {
@@ -624,6 +689,205 @@ void main() {
           'http://localhost:3000/v2/verify/$_encryptedBitcoinAddress#k-dest-id=$_secret',
         ),
       );
+    });
+
+    test('pol URI looks up branta_id, ignores amount query, and decrypts', () async {
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdtPolygonAddress,
+          DestinationType.usdtPolygon,
+        ),
+      ]);
+
+      final result = await service.verify(_brantaUsdtPolygonLookup());
+
+      expect(
+        client.getPaymentsCalls.single.address,
+        equals(_encryptedUsdtPolygonAddress),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.payments.single.destinations.single.value,
+        equals(_usdtPolygonAddress),
+      );
+      expect(
+        result.payments.single.destinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+      expect(result.matchedDestinations, hasLength(1));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdtPolygonAddress),
+      );
+    });
+
+    test('pol URI verifies usdc_polygon and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdcPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdcPolygonAddress,
+          DestinationType.usdcPolygon,
+        ),
+      ]);
+
+      final result = await service.verify(_brantaUsdcPolygonLookup());
+
+      expect(
+        client.getPaymentsCalls.single.address,
+        equals(_encryptedUsdcPolygonAddress),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdcPolygon),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdcPolygonAddress),
+      );
+    });
+
+    test('pol URI with a swapped usdc address is tampered', () async {
+      client.setupGetPayments(_encryptedUsdcPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdcPolygonAddress,
+          DestinationType.usdcPolygon,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaUsdcPolygonLookup(_swappedUsdtPolygonAddress),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+      expect(result.matchedDestinations, isEmpty);
+    });
+
+    test('pol verify binds only the matching rail when usdt and usdc differ', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedUsdtPolygonAddress,
+            type: DestinationType.usdtPolygon,
+          )
+          .addDestination(
+            _encryptedUsdcPolygonAddress,
+            type: DestinationType.usdcPolygon,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [payment]);
+
+      final result = await service.verify(_brantaUsdtPolygonLookup());
+      expect(result.status, equals(VerifyStatus.match));
+      expect(result.matchedDestinations, hasLength(1));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+      expect(result.payments.single.destinations[1].isEncrypted, isTrue);
+    });
+
+    test('pol URI address compare is case-insensitive', () async {
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdtPolygonAddress,
+          DestinationType.usdtPolygon,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaUsdtPolygonLookup(_usdtPolygonAddressLower),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+    });
+
+    test('pol URI with a swapped address is tampered', () async {
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdtPolygonAddress,
+          DestinationType.usdtPolygon,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaUsdtPolygonLookup(_swappedUsdtPolygonAddress),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('bare usdt address and pol without branta params are unknown', () async {
+      expect(
+        (await service.verify(_usdtPolygonAddress)).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(
+        (await service.verify(
+          'pol:$_usdtPolygonAddress?value=50&currency=USD',
+        )).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(client.getPaymentsCalls, isEmpty);
+    });
+
+    test('pol verify ignores a sibling bitcoin rail on the same payment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
+            _encryptedUsdtPolygonAddress,
+            type: DestinationType.usdtPolygon,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [payment]);
+
+      final result = await service.verify(_brantaUsdtPolygonLookup());
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.payments.single.destinations[0].value,
+        equals(_encryptedBitcoinAddress),
+      );
+      expect(result.payments.single.destinations[0].isEncrypted, isTrue);
+      expect(
+        result.payments.single.destinations[1].value,
+        equals(_usdtPolygonAddress),
+      );
+      expect(result.payments.single.destinations[1].isEncrypted, isFalse);
+      expect(result.matchedDestinations, hasLength(1));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+    });
+
+    test('bitcoin verify ignores a sibling usdt_polygon rail on the same payment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
+            _encryptedUsdtPolygonAddress,
+            type: DestinationType.usdtPolygon,
+          )
+          .build();
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+
+      final result = await service.verify(
+        'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret',
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.payments.single.destinations[0].value,
+        equals(_bitcoinAddress),
+      );
+      expect(
+        result.payments.single.destinations[1].value,
+        equals(_encryptedUsdtPolygonAddress),
+      );
+      expect(result.payments.single.destinations[1].isEncrypted, isTrue);
     });
 
     test('bare bitcoin URI is unknown and does not call the client', () async {
@@ -1065,6 +1329,108 @@ void main() {
         );
       },
     );
+
+    test('usdt_polygon encrypts with the generated secret', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _usdtPolygonAddress,
+            type: DestinationType.usdtPolygon,
+          )
+          .build();
+      final id = payment.destinations.single.id!;
+      client.setupPostPayment(
+        Payment(
+          destinations: [
+            Destination(
+              value: _encryptedUsdtPolygonAddress,
+              type: DestinationType.usdtPolygon,
+              id: id,
+            ),
+          ],
+        ),
+      );
+
+      await service.addPayment(payment);
+
+      expect(payment.destinations.single.value, equals(_usdtPolygonAddress));
+      expect(
+        client.lastPosted!.destinations.single.value,
+        equals(_encryptedUsdtPolygonAddress),
+      );
+      expect(
+        client.lastPosted!.destinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+    });
+
+    test('usdt_polygon without an explicit type cannot be encrypted', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_usdtPolygonAddress)
+          .build();
+
+      expect(
+        () => service.addPayment(payment),
+        throwsA(
+          isA<BrantaPaymentException>().having(
+            (e) => e.message,
+            'message',
+            contains('cannot be encrypted'),
+          ),
+        ),
+      );
+      expect(client.postPaymentCallCount, equals(0));
+    });
+
+    test('usdc_polygon encrypts with the generated secret', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _usdcPolygonAddress,
+            type: DestinationType.usdcPolygon,
+          )
+          .build();
+      final id = payment.destinations.single.id!;
+      client.setupPostPayment(
+        Payment(
+          destinations: [
+            Destination(
+              value: _encryptedUsdcPolygonAddress,
+              type: DestinationType.usdcPolygon,
+              id: id,
+            ),
+          ],
+        ),
+      );
+
+      await service.addPayment(payment);
+
+      expect(payment.destinations.single.value, equals(_usdcPolygonAddress));
+      expect(
+        client.lastPosted!.destinations.single.value,
+        equals(_encryptedUsdcPolygonAddress),
+      );
+      expect(
+        client.lastPosted!.destinations.single.type,
+        equals(DestinationType.usdcPolygon),
+      );
+    });
+
+    test('usdc_polygon without an explicit type cannot be encrypted', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_usdcPolygonAddress)
+          .build();
+
+      expect(
+        () => service.addPayment(payment),
+        throwsA(
+          isA<BrantaPaymentException>().having(
+            (e) => e.message,
+            'message',
+            contains('cannot be encrypted'),
+          ),
+        ),
+      );
+      expect(client.postPaymentCallCount, equals(0));
+    });
 
     test('bolt11 and ark encrypt with the derived hash', () async {
       final bolt11 = PaymentBuilder()
