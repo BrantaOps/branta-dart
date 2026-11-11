@@ -76,7 +76,7 @@ bool _addressesMatch(String a, String b) {
   bool isBech32(String v) =>
       RegExp(r'^(bc|tb|bcrt)1', caseSensitive: false).hasMatch(v);
   if (isBech32(a) && isBech32(b)) return a.toLowerCase() == b.toLowerCase();
-  if (a.startsWith('0x') && b.startsWith('0x')) {
+  if (a.toLowerCase().startsWith('0x') && b.toLowerCase().startsWith('0x')) {
     return a.toLowerCase() == b.toLowerCase();
   }
   return a == b;
