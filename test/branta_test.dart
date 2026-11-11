@@ -189,6 +189,16 @@ const String _swappedUsdtPolygonAddress =
     '0x1111111111111111111111111111111111111111';
 const String _encryptedUsdtPolygonAddress = 'encrypted-usdt-polygon-address';
 const String _encryptedUsdcPolygonAddress = 'encrypted-usdc-polygon-address';
+const String _usdtEthereumAddress = '0xBF5550253939187432Ef4dccE8089765d3DCb47f';
+const String _encryptedUsdtEthereumAddress = 'encrypted-usdt-ethereum-address';
+const String _usdtTronAddress = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
+const String _encryptedUsdtTronAddress = 'encrypted-usdt-tron-address';
+const String _usdcSolanaAddress = '7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDofycyinf';
+const String _encryptedUsdcSolanaAddress = 'encrypted-usdc-solana-address';
+
+String _brantaChainLookup(String scheme, String address, String encrypted) =>
+    '$scheme:$address?value=50&branta_id=${Uri.encodeComponent(encrypted)}&branta_secret=${Uri.encodeComponent(_secret)}';
+
 const String _bolt11Invoice = 'lnbc100n1ptest';
 const String _encryptedBolt11 = 'encrypted-bolt11-value';
 const String _arkAddress = 'ark100testaddress';
@@ -271,6 +281,22 @@ void _setupDefaultMocks(MockAesEncryption aes) {
     _secret,
     _encryptedUsdcPolygonAddress,
   );
+  aes.setupDecryptResult(
+    _encryptedUsdtEthereumAddress,
+    _secret,
+    _usdtEthereumAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdtTronAddress,
+    _secret,
+    _usdtTronAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdcSolanaAddress,
+    _secret,
+    _usdcSolanaAddress,
+  );
+  aes.setupEncrypt(_usdtTronAddress, _secret, _encryptedUsdtTronAddress);
   aes.setupEncrypt(
     _arkAddress,
     _arkHash,
@@ -421,6 +447,43 @@ void main() {
       );      expect(parser.destinations, hasLength(1));
       expect(parser.onChainEncryptionText, equals('abc+def='));
       expect(parser.onChainEncryptionSecret, equals('1234'));
+    });
+
+    test('chain URI schemes map to their destination family', () {
+      expect(
+        QRParser('eth:$_usdtEthereumAddress').expectedSecretKeyTypes,
+        equals(ethereumEvmDestinationTypes),
+      );
+      expect(
+        QRParser('bsc:$_usdtEthereumAddress').expectedSecretKeyTypes,
+        equals(bscEvmDestinationTypes),
+      );
+      expect(
+        QRParser('tron:$_usdtTronAddress').expectedSecretKeyTypes,
+        equals(tronDestinationTypes),
+      );
+      expect(
+        QRParser('ton:$_usdtTronAddress').expectedSecretKeyTypes,
+        equals(tonDestinationTypes),
+      );
+      final sol = QRParser('sol:$_usdcSolanaAddress?branta_id=a&branta_secret=b');
+      expect(sol.expectedSecretKeyTypes, equals(solanaDestinationTypes));
+      expect(sol.destination, equals(_usdcSolanaAddress));
+      expect(sol.destinationType, isNull);
+      expect(sol.destinations.single.secretKey, isTrue);
+    });
+
+    test('isSecretKeyAddress covers bitcoin and every stable family member', () {
+      expect(DestinationType.bitcoinAddress.isSecretKeyAddress, isTrue);
+      for (final family in secretKeyUriFamilies.values) {
+        for (final type in family) {
+          expect(type.isSecretKeyAddress, isTrue, reason: type.jsonValue);
+        }
+      }
+      expect(DestinationType.bolt11.isSecretKeyAddress, isFalse);
+      expect(DestinationType.arkAddress.isSecretKeyAddress, isFalse);
+      expect(DestinationType.silentPayment.isSecretKeyAddress, isFalse);
+      expect(DestinationType.fromJson('usdt_tron'), DestinationType.usdtTron);
     });
 
     test('pol URI without query still maps to the Polygon EVM family', () {
@@ -828,6 +891,89 @@ void main() {
         _brantaUsdtPolygonLookup(_swappedUsdtPolygonAddress),
       );
       expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('eth URI verifies usdt_ethereum and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [
+        _encryptedPayment(
+          _encryptedUsdtEthereumAddress,
+          DestinationType.usdtEthereum,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _usdtEthereumAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtEthereum),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdtEthereumAddress),
+      );
+    });
+
+    test('tron URI verifies usdt_tron and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdtTronAddress, [
+        _encryptedPayment(_encryptedUsdtTronAddress, DestinationType.usdtTron),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup('tron', _usdtTronAddress, _encryptedUsdtTronAddress),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtTron),
+      );
+      expect(result.matchedDestinations.single.value, equals(_usdtTronAddress));
+    });
+
+    test('sol URI verifies usdc_solana and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdcSolanaAddress, [
+        _encryptedPayment(
+          _encryptedUsdcSolanaAddress,
+          DestinationType.usdcSolana,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'sol',
+          _usdcSolanaAddress,
+          _encryptedUsdcSolanaAddress,
+        ),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdcSolana),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdcSolanaAddress),
+      );
+    });
+
+    test('bare tron and solana addresses are unknown', () async {
+      expect(
+        (await service.verify(_usdtTronAddress)).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(
+        (await service.verify(_usdcSolanaAddress)).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(client.getPaymentsCalls, isEmpty);
     });
 
     test('bare usdt address and pol without branta params are unknown', () async {
@@ -1374,6 +1520,36 @@ void main() {
       expect(
         client.lastPosted!.destinations.single.type,
         equals(DestinationType.usdtPolygon),
+      );
+    });
+
+    test('usdt_tron encrypts with the generated secret', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_usdtTronAddress, type: DestinationType.usdtTron)
+          .build();
+      final id = payment.destinations.single.id!;
+      client.setupPostPayment(
+        Payment(
+          destinations: [
+            Destination(
+              value: _encryptedUsdtTronAddress,
+              type: DestinationType.usdtTron,
+              id: id,
+            ),
+          ],
+        ),
+      );
+
+      await service.addPayment(payment);
+
+      expect(payment.destinations.single.value, equals(_usdtTronAddress));
+      expect(
+        client.lastPosted!.destinations.single.value,
+        equals(_encryptedUsdtTronAddress),
+      );
+      expect(
+        client.lastPosted!.destinations.single.type,
+        equals(DestinationType.usdtTron),
       );
     });
 

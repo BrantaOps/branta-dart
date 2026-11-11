@@ -1,3 +1,7 @@
+## Unreleased
+
+- Added: multi-rail stablecoin destination types `usdt_ethereum`, `usdc_ethereum`, `usdt_bsc`, `usdc_bsc`, `usdt_tron`, `usdt_ton`, `usdc_ton`, `usdt_solana`, `usdc_solana`. `addPayment` encrypts them with a random secret. `verify()` parses `eth:`, `bsc:`, `tron:`, `ton:`, and `sol:` URIs with `branta_id` / `branta_secret` (`secretKeyUriFamilies`), match-if-any within the scheme's family. A bare address is `unknown`.
+
 ## 4.2.0
 
 - Added: `DestinationType.usdtPolygon` for Polygon USDT. `addPayment` encrypts the recipient with a random secret (same pattern as bitcoin). `verify()` parses `pol:` URIs with `branta_id` / `branta_secret`; other query params (`value`, `currency`, `user`) are ignored for binding. A bare `0x` address is `unknown`. EVM address compare is case-insensitive.

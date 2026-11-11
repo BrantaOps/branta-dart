@@ -5,7 +5,7 @@ class QrDestination {
   final String value;
 
   /// Known rail type when the scheme or payload names one (e.g. bitcoin).
-  /// Not set for `pol:` — token comes from the matched payment destination.
+  /// Not set for chain URI schemes (`pol:`, `eth:`, `tron:`, …) — token comes from the matched payment destination.
   final DestinationType? type;
 
   /// True when this instruction is a secret-key address rail for verify.
@@ -113,12 +113,13 @@ class QRParser {
     }
 
     final scheme = uri.scheme.toLowerCase();
-    if (scheme == 'pol') {
+    final secretKeyFamily = secretKeyUriFamilies[scheme];
+    if (secretKeyFamily != null) {
       final dest = _getDestination(text);
       if (dest != null) {
         // Address only — token comes from the matched payment destination after verify.
         destinations.add(QrDestination(dest, null, secretKey: true));
-        expectedSecretKeyTypes = List.of(polygonEvmDestinationTypes);
+        expectedSecretKeyTypes = List.of(secretKeyFamily);
       }
       final queryParams = parseQueryString(_queryFromText(text));
       onChainEncryptionText = queryParams['branta_id'];
