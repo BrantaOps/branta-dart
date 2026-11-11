@@ -11,7 +11,6 @@ enum DestinationType {
   usdcBsc('usdc_bsc'),
   usdtTron('usdt_tron'),
   usdtTon('usdt_ton'),
-  usdcTon('usdc_ton'),
   usdtSolana('usdt_solana'),
   usdcSolana('usdc_solana');
 
@@ -56,7 +55,6 @@ const List<DestinationType> tronDestinationTypes = [DestinationType.usdtTron];
 
 const List<DestinationType> tonDestinationTypes = [
   DestinationType.usdtTon,
-  DestinationType.usdcTon,
 ];
 
 const List<DestinationType> solanaDestinationTypes = [
