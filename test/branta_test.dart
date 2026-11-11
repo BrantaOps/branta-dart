@@ -802,6 +802,20 @@ void main() {
       expect(result.status, equals(VerifyStatus.match));
     });
 
+    test('pol URI 0x prefix compare is case-insensitive', () async {
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdtPolygonAddress,
+          DestinationType.usdtPolygon,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaUsdtPolygonLookup('0X${_usdtPolygonAddress.substring(2)}'),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+    });
+
     test('pol URI with a swapped address is tampered', () async {
       client.setupGetPayments(_encryptedUsdtPolygonAddress, [
         _encryptedPayment(
