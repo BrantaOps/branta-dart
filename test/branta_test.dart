@@ -1,4 +1,5 @@
 import 'package:branta/branta.dart';
+import 'package:branta/src/enums/destination_type.dart' hide DestinationType;
 import 'package:branta/src/exceptions/incomplete_error.dart';
 import 'package:branta/src/helpers/aes_gcm_cipher.dart';
 import 'package:branta/src/helpers/branta_extensions.dart';
@@ -189,6 +190,32 @@ const String _swappedUsdtPolygonAddress =
     '0x1111111111111111111111111111111111111111';
 const String _encryptedUsdtPolygonAddress = 'encrypted-usdt-polygon-address';
 const String _encryptedUsdcPolygonAddress = 'encrypted-usdc-polygon-address';
+const String _swappedEvmAddress = _swappedUsdtPolygonAddress;
+const String _usdtEthereumAddress = '0xBF5550253939187432Ef4dccE8089765d3DCb47f';
+const String _encryptedUsdtEthereumAddress = 'encrypted-usdt-ethereum-address';
+const String _usdcEthereumAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+const String _encryptedUsdcEthereumAddress = 'encrypted-usdc-ethereum-address';
+const String _usdtBscAddress = '0x55d398326f99059fF775485246999027B3197955';
+const String _encryptedUsdtBscAddress = 'encrypted-usdt-bsc-address';
+const String _usdcBscAddress = '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d';
+const String _encryptedUsdcBscAddress = 'encrypted-usdc-bsc-address';
+const String _usdtTronAddress = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
+const String _encryptedUsdtTronAddress = 'encrypted-usdt-tron-address';
+const String _swappedTronAddress = 'TXyZ1111111111111111111111111111111';
+const String _usdtTonAddress =
+    'EQDtFpEwcFAEcRe5mLVh2N6C0y-_tur3BYOM93pEZPw390by';
+const String _encryptedUsdtTonAddress = 'encrypted-usdt-ton-address';
+const String _swappedTonAddress =
+    'EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c';
+const String _usdtSolanaAddress = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+const String _encryptedUsdtSolanaAddress = 'encrypted-usdt-solana-address';
+const String _usdcSolanaAddress = '7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDofycyinf';
+const String _encryptedUsdcSolanaAddress = 'encrypted-usdc-solana-address';
+const String _swappedSolanaAddress = '11111111111111111111111111111111';
+
+String _brantaChainLookup(String scheme, String address, String encrypted) =>
+    '$scheme:$address?value=50&branta_id=${Uri.encodeComponent(encrypted)}&branta_secret=${Uri.encodeComponent(_secret)}';
+
 const String _bolt11Invoice = 'lnbc100n1ptest';
 const String _encryptedBolt11 = 'encrypted-bolt11-value';
 const String _arkAddress = 'ark100testaddress';
@@ -271,6 +298,54 @@ void _setupDefaultMocks(MockAesEncryption aes) {
     _secret,
     _encryptedUsdcPolygonAddress,
   );
+  aes.setupDecryptResult(
+    _encryptedUsdtEthereumAddress,
+    _secret,
+    _usdtEthereumAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdcEthereumAddress,
+    _secret,
+    _usdcEthereumAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdtBscAddress,
+    _secret,
+    _usdtBscAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdcBscAddress,
+    _secret,
+    _usdcBscAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdtTronAddress,
+    _secret,
+    _usdtTronAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdtTonAddress,
+    _secret,
+    _usdtTonAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdtSolanaAddress,
+    _secret,
+    _usdtSolanaAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdcSolanaAddress,
+    _secret,
+    _usdcSolanaAddress,
+  );
+  aes.setupEncrypt(_usdtTronAddress, _secret, _encryptedUsdtTronAddress);
+  aes.setupEncrypt(_usdtEthereumAddress, _secret, _encryptedUsdtEthereumAddress);
+  aes.setupEncrypt(_usdcEthereumAddress, _secret, _encryptedUsdcEthereumAddress);
+  aes.setupEncrypt(_usdtBscAddress, _secret, _encryptedUsdtBscAddress);
+  aes.setupEncrypt(_usdcBscAddress, _secret, _encryptedUsdcBscAddress);
+  aes.setupEncrypt(_usdtTonAddress, _secret, _encryptedUsdtTonAddress);
+  aes.setupEncrypt(_usdtSolanaAddress, _secret, _encryptedUsdtSolanaAddress);
+  aes.setupEncrypt(_usdcSolanaAddress, _secret, _encryptedUsdcSolanaAddress);
   aes.setupEncrypt(
     _arkAddress,
     _arkHash,
@@ -421,6 +496,48 @@ void main() {
       );      expect(parser.destinations, hasLength(1));
       expect(parser.onChainEncryptionText, equals('abc+def='));
       expect(parser.onChainEncryptionSecret, equals('1234'));
+    });
+
+    test('chain URI schemes map to their destination family', () {
+      expect(
+        QRParser('eth:$_usdtEthereumAddress').expectedSecretKeyTypes,
+        equals(ethereumEvmDestinationTypes),
+      );
+      expect(
+        QRParser('bsc:$_usdtEthereumAddress').expectedSecretKeyTypes,
+        equals(bscEvmDestinationTypes),
+      );
+      expect(
+        QRParser('tron:$_usdtTronAddress').expectedSecretKeyTypes,
+        equals(tronDestinationTypes),
+      );
+      final ton = QRParser('ton:$_usdtTonAddress');
+      expect(ton.expectedSecretKeyTypes, equals(tonDestinationTypes));
+      expect(ton.destination, equals(_usdtTonAddress));
+      expect(ton.destinationType, isNull);
+      expect(ton.destinations.single.secretKey, isTrue);
+      final sol = QRParser('sol:$_usdcSolanaAddress?branta_id=a&branta_secret=b');
+      expect(sol.expectedSecretKeyTypes, equals(solanaDestinationTypes));
+      expect(sol.destination, equals(_usdcSolanaAddress));
+      expect(sol.destinationType, isNull);
+      expect(sol.destinations.single.secretKey, isTrue);
+    });
+
+    test('isSecretKeyAddressType covers bitcoin and every stable family member', () {
+      expect(isSecretKeyAddressType(DestinationType.bitcoinAddress), isTrue);
+      for (final family in secretKeyUriFamilies.values) {
+        for (final type in family) {
+          expect(
+            isSecretKeyAddressType(type),
+            isTrue,
+            reason: type.jsonValue,
+          );
+        }
+      }
+      expect(isSecretKeyAddressType(DestinationType.bolt11), isFalse);
+      expect(isSecretKeyAddressType(DestinationType.arkAddress), isFalse);
+      expect(isSecretKeyAddressType(DestinationType.silentPayment), isFalse);
+      expect(DestinationType.fromJson('usdt_tron'), DestinationType.usdtTron);
     });
 
     test('pol URI without query still maps to the Polygon EVM family', () {
@@ -802,6 +919,20 @@ void main() {
       expect(result.status, equals(VerifyStatus.match));
     });
 
+    test('pol URI 0x prefix compare is case-insensitive', () async {
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdtPolygonAddress,
+          DestinationType.usdtPolygon,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaUsdtPolygonLookup('0X${_usdtPolygonAddress.substring(2)}'),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+    });
+
     test('pol URI with a swapped address is tampered', () async {
       client.setupGetPayments(_encryptedUsdtPolygonAddress, [
         _encryptedPayment(
@@ -816,15 +947,529 @@ void main() {
       expect(result.status, equals(VerifyStatus.tampered));
     });
 
-    test('bare usdt address and pol without branta params are unknown', () async {
+    test('eth URI verifies usdt_ethereum and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [
+        _encryptedPayment(
+          _encryptedUsdtEthereumAddress,
+          DestinationType.usdtEthereum,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _usdtEthereumAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtEthereum),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdtEthereumAddress),
+      );
+    });
+
+    test('eth URI with a swapped address is tampered', () async {
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [
+        _encryptedPayment(
+          _encryptedUsdtEthereumAddress,
+          DestinationType.usdtEthereum,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _swappedEvmAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+      expect(result.matchedDestinations, isEmpty);
+    });
+
+    test('eth URI address compare is case-insensitive', () async {
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [
+        _encryptedPayment(
+          _encryptedUsdtEthereumAddress,
+          DestinationType.usdtEthereum,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _usdtEthereumAddress.toLowerCase(),
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+    });
+
+    test('eth URI 0x prefix compare is case-insensitive', () async {
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [
+        _encryptedPayment(
+          _encryptedUsdtEthereumAddress,
+          DestinationType.usdtEthereum,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          '0X${_usdtEthereumAddress.substring(2)}',
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+    });
+
+    test('eth URI ignores a sibling bitcoin rail on the same payment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
+            _encryptedUsdtEthereumAddress,
+            type: DestinationType.usdtEthereum,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _usdtEthereumAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.payments.single.destinations[0].value,
+        equals(_encryptedBitcoinAddress),
+      );
+      expect(result.payments.single.destinations[0].isEncrypted, isTrue);
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtEthereum),
+      );
+    });
+
+    test('eth URI swapped is still tampered when sibling bitcoin is present', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
+            _encryptedUsdtEthereumAddress,
+            type: DestinationType.usdtEthereum,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _swappedEvmAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('eth URI with a swapped usdc address is tampered', () async {
+      client.setupGetPayments(_encryptedUsdcEthereumAddress, [
+        _encryptedPayment(
+          _encryptedUsdcEthereumAddress,
+          DestinationType.usdcEthereum,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _swappedEvmAddress,
+          _encryptedUsdcEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('eth URI match-if-any binds usdt and leaves sibling usdc encrypted', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedUsdtEthereumAddress,
+            type: DestinationType.usdtEthereum,
+          )
+          .addDestination(
+            _encryptedUsdcEthereumAddress,
+            type: DestinationType.usdcEthereum,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _usdtEthereumAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(result.matchedDestinations, hasLength(1));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtEthereum),
+      );
+      expect(result.payments.single.destinations[0].isEncrypted, isFalse);
+      expect(result.payments.single.destinations[1].value,
+          equals(_encryptedUsdcEthereumAddress));
+      expect(result.payments.single.destinations[1].isEncrypted, isTrue);
+    });
+
+    test('eth URI swapped is tampered when no ethereum family rail matches', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedUsdtEthereumAddress,
+            type: DestinationType.usdtEthereum,
+          )
+          .addDestination(
+            _encryptedUsdcEthereumAddress,
+            type: DestinationType.usdcEthereum,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _swappedEvmAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('eth URI with a polygon-only payment is unknown', () async {
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [
+        _encryptedPayment(
+          _encryptedUsdtPolygonAddress,
+          DestinationType.usdtPolygon,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'eth',
+          _usdtEthereumAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.unknown));
+      expect(result.matchedDestinations, isEmpty);
+    });
+
+    test('bsc URI verifies usdt_bsc and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdtBscAddress, [
+        _encryptedPayment(_encryptedUsdtBscAddress, DestinationType.usdtBsc),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup('bsc', _usdtBscAddress, _encryptedUsdtBscAddress),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtBsc),
+      );
+      expect(result.matchedDestinations.single.value, equals(_usdtBscAddress));
+    });
+
+    test('bsc URI with a swapped address is tampered', () async {
+      client.setupGetPayments(_encryptedUsdtBscAddress, [
+        _encryptedPayment(_encryptedUsdtBscAddress, DestinationType.usdtBsc),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup('bsc', _swappedEvmAddress, _encryptedUsdtBscAddress),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('bsc URI match-if-any binds usdt and leaves sibling usdc encrypted', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedUsdtBscAddress,
+            type: DestinationType.usdtBsc,
+          )
+          .addDestination(
+            _encryptedUsdcBscAddress,
+            type: DestinationType.usdcBsc,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtBscAddress, [payment]);
+
+      final result = await service.verify(
+        _brantaChainLookup('bsc', _usdtBscAddress, _encryptedUsdtBscAddress),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtBsc),
+      );
+      expect(result.payments.single.destinations[0].isEncrypted, isFalse);
+      expect(result.payments.single.destinations[1].isEncrypted, isTrue);
+    });
+
+    test('bsc URI ignores a sibling bitcoin rail on the same payment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
+            _encryptedUsdtBscAddress,
+            type: DestinationType.usdtBsc,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtBscAddress, [payment]);
+
+      final result = await service.verify(
+        _brantaChainLookup('bsc', _usdtBscAddress, _encryptedUsdtBscAddress),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(result.payments.single.destinations[0].isEncrypted, isTrue);
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtBsc),
+      );
+    });
+
+    test('bsc URI swapped is still tampered when sibling bitcoin is present', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
+            _encryptedUsdtBscAddress,
+            type: DestinationType.usdtBsc,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtBscAddress, [payment]);
+
+      final result = await service.verify(
+        _brantaChainLookup('bsc', _swappedEvmAddress, _encryptedUsdtBscAddress),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('tron URI verifies usdt_tron and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdtTronAddress, [
+        _encryptedPayment(_encryptedUsdtTronAddress, DestinationType.usdtTron),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup('tron', _usdtTronAddress, _encryptedUsdtTronAddress),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtTron),
+      );
+      expect(result.matchedDestinations.single.value, equals(_usdtTronAddress));
+    });
+
+    test('tron URI with a swapped address is tampered', () async {
+      client.setupGetPayments(_encryptedUsdtTronAddress, [
+        _encryptedPayment(_encryptedUsdtTronAddress, DestinationType.usdtTron),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'tron',
+          _swappedTronAddress,
+          _encryptedUsdtTronAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('ton URI verifies usdt_ton and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdtTonAddress, [
+        _encryptedPayment(_encryptedUsdtTonAddress, DestinationType.usdtTon),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup('ton', _usdtTonAddress, _encryptedUsdtTonAddress),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtTon),
+      );
+      expect(result.matchedDestinations.single.value, equals(_usdtTonAddress));
+    });
+
+    test('ton URI with a swapped address is tampered', () async {
+      client.setupGetPayments(_encryptedUsdtTonAddress, [
+        _encryptedPayment(_encryptedUsdtTonAddress, DestinationType.usdtTon),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'ton',
+          _swappedTonAddress,
+          _encryptedUsdtTonAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('sol URI verifies usdc_solana and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdcSolanaAddress, [
+        _encryptedPayment(
+          _encryptedUsdcSolanaAddress,
+          DestinationType.usdcSolana,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'sol',
+          _usdcSolanaAddress,
+          _encryptedUsdcSolanaAddress,
+        ),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdcSolana),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdcSolanaAddress),
+      );
+    });
+
+    test('sol URI verifies usdt_solana and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdtSolanaAddress, [
+        _encryptedPayment(
+          _encryptedUsdtSolanaAddress,
+          DestinationType.usdtSolana,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'sol',
+          _usdtSolanaAddress,
+          _encryptedUsdtSolanaAddress,
+        ),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtSolana),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdtSolanaAddress),
+      );
+    });
+
+    test('sol URI with a swapped address is tampered', () async {
+      client.setupGetPayments(_encryptedUsdcSolanaAddress, [
+        _encryptedPayment(
+          _encryptedUsdcSolanaAddress,
+          DestinationType.usdcSolana,
+        ),
+      ]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'sol',
+          _swappedSolanaAddress,
+          _encryptedUsdcSolanaAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
+
+    test('sol URI match-if-any binds usdt and leaves sibling usdc encrypted', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedUsdtSolanaAddress,
+            type: DestinationType.usdtSolana,
+          )
+          .addDestination(
+            _encryptedUsdcSolanaAddress,
+            type: DestinationType.usdcSolana,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtSolanaAddress, [payment]);
+
+      final result = await service.verify(
+        _brantaChainLookup(
+          'sol',
+          _usdtSolanaAddress,
+          _encryptedUsdtSolanaAddress,
+        ),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtSolana),
+      );
+      expect(result.payments.single.destinations[0].isEncrypted, isFalse);
+      expect(result.payments.single.destinations[1].isEncrypted, isTrue);
+    });
+
+    test('bare chain addresses and URIs without branta params are unknown', () async {
       expect(
         (await service.verify(_usdtPolygonAddress)).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(
+        (await service.verify(_usdtEthereumAddress)).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(
+        (await service.verify(_usdtTronAddress)).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(
+        (await service.verify(_usdtTonAddress)).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(
+        (await service.verify(_usdcSolanaAddress)).status,
         equals(VerifyStatus.unknown),
       );
       expect(
         (await service.verify(
           'pol:$_usdtPolygonAddress?value=50&currency=USD',
         )).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(
+        (await service.verify('eth:$_usdtEthereumAddress?value=50')).status,
+        equals(VerifyStatus.unknown),
+      );
+      expect(
+        (await service.verify('tron:$_usdtTronAddress')).status,
         equals(VerifyStatus.unknown),
       );
       expect(client.getPaymentsCalls, isEmpty);
@@ -1362,6 +2007,53 @@ void main() {
         equals(DestinationType.usdtPolygon),
       );
     });
+
+    for (final rail in <(String, DestinationType, String)>[
+      (
+        _usdtEthereumAddress,
+        DestinationType.usdtEthereum,
+        _encryptedUsdtEthereumAddress,
+      ),
+      (_usdtBscAddress, DestinationType.usdtBsc, _encryptedUsdtBscAddress),
+      (_usdtTronAddress, DestinationType.usdtTron, _encryptedUsdtTronAddress),
+      (_usdtTonAddress, DestinationType.usdtTon, _encryptedUsdtTonAddress),
+      (
+        _usdtSolanaAddress,
+        DestinationType.usdtSolana,
+        _encryptedUsdtSolanaAddress,
+      ),
+      (
+        _usdcSolanaAddress,
+        DestinationType.usdcSolana,
+        _encryptedUsdcSolanaAddress,
+      ),
+    ]) {
+      final address = rail.$1;
+      final type = rail.$2;
+      final encrypted = rail.$3;
+      test('${type.jsonValue} encrypts with the generated secret', () async {
+        final payment = PaymentBuilder()
+            .addDestination(address, type: type)
+            .build();
+        final id = payment.destinations.single.id!;
+        client.setupPostPayment(
+          Payment(
+            destinations: [
+              Destination(value: encrypted, type: type, id: id),
+            ],
+          ),
+        );
+
+        await service.addPayment(payment);
+
+        expect(payment.destinations.single.value, equals(address));
+        expect(
+          client.lastPosted!.destinations.single.value,
+          equals(encrypted),
+        );
+        expect(client.lastPosted!.destinations.single.type, equals(type));
+      });
+    }
 
     test('usdt_polygon without an explicit type cannot be encrypted', () async {
       final payment = PaymentBuilder()

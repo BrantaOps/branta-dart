@@ -1,3 +1,11 @@
+## 4.3.0
+
+- Added: multi-rail stablecoin destination types `usdt_ethereum`, `usdc_ethereum`, `usdt_bsc`, `usdc_bsc`, `usdt_tron`, `usdt_ton`, `usdt_solana`, `usdc_solana`. `addPayment` encrypts them with a random secret. `verify()` parses `eth:`, `bsc:`, `tron:`, `ton:`, and `sol:` URIs with `branta_id` / `branta_secret`, match-if-any within the scheme's family. A bare address is `unknown`. Token is on `matchedDestinations[].type`, not the URI scheme.
+- Changed: `lib/branta.dart` exports only `DestinationType` from the enum library (family lists / `secretKeyUriFamilies` stay internal).
+- Removed: `DestinationType.isPolygonEvm` and `DestinationType.isSecretKeyAddress` (secret-key classification stays package-internal via `isSecretKeyAddressType`).
+- Fixed: EVM address compare treats `0X` and `0x` prefixes the same (case-insensitive hex).
+- Notes: `usdc_ton` is deferred until a platform names a concrete TON USDC jetton. Matches `@branta-ops/branta` / `branta` Python 4.3.0.
+
 ## 4.2.0
 
 - Added: `DestinationType.usdtPolygon` for Polygon USDT. `addPayment` encrypts the recipient with a random secret (same pattern as bitcoin). `verify()` parses `pol:` URIs with `branta_id` / `branta_secret`; other query params (`value`, `currency`, `user`) are ignored for binding. A bare `0x` address is `unknown`. EVM address compare is case-insensitive.

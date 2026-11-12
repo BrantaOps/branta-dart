@@ -76,7 +76,7 @@ bool _addressesMatch(String a, String b) {
   bool isBech32(String v) =>
       RegExp(r'^(bc|tb|bcrt)1', caseSensitive: false).hasMatch(v);
   if (isBech32(a) && isBech32(b)) return a.toLowerCase() == b.toLowerCase();
-  if (a.startsWith('0x') && b.startsWith('0x')) {
+  if (a.toLowerCase().startsWith('0x') && b.toLowerCase().startsWith('0x')) {
     return a.toLowerCase() == b.toLowerCase();
   }
   return a == b;
@@ -325,7 +325,7 @@ class BrantaService {
     for (final destination in payment.destinations) {
       if (!destination.isEncrypted) continue;
       final type = destination.type;
-      if (type == null || !type.isSecretKeyAddress) continue;
+      if (type == null || !isSecretKeyAddressType(type)) continue;
       // Outside this QR's rail family (e.g. bitcoin when scanning pol:) — leave encrypted.
       if (expectedOnChainTypes != null && !expectedOnChainTypes.contains(type)) {
         continue;
@@ -417,7 +417,7 @@ class BrantaService {
         destination.type = detected;
       }
 
-      if (detected != null && detected.isSecretKeyAddress) {
+      if (detected != null && isSecretKeyAddressType(detected)) {
         destination.value = await _aesEncryption.encrypt(
           destination.value,
           secret,

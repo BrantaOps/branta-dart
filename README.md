@@ -41,7 +41,7 @@ switch (result.status) {
 }
 ```
 
-On-chain Bitcoin needs a `bitcoin:` URI with `branta_id` / `branta_secret`. Polygon EVM rails (`usdt_polygon`, `usdc_polygon`) need a `pol:` URI with the same params — token is on `matchedDestinations[].type`, not the `pol:` scheme. bolt11, Ark, and silent payments resolve from the value. A bare address (including bare `0x`) is `unknown`.
+On-chain Bitcoin needs a `bitcoin:` URI with `branta_id` / `branta_secret`. Stablecoin rails need a chain URI with the same params — `pol:` (`usdt_polygon`, `usdc_polygon`), `eth:` (`usdt_ethereum`, `usdc_ethereum`), `bsc:` (`usdt_bsc`, `usdc_bsc`), `tron:` (`usdt_tron`), `ton:` (`usdt_ton`), `sol:` (`usdt_solana`, `usdc_solana`). Token is on `matchedDestinations[].type`, not the URI scheme; verify is match-if-any within the scheme's family. bolt11, Ark, and silent payments resolve from the value. A bare address (including bare `0x`) is `unknown`.
 
 A 404 is `unknown`. 5xx, 429, or no network is `incomplete`. `verifyUrl` is always returned.
 
@@ -58,6 +58,7 @@ final service = BrantaService(
 final payment = PaymentBuilder()
     .setDescription('Invoice #12345')
     .addDestination('bc1q…', type: DestinationType.bitcoinAddress)
+    .addDestination('0x…', type: DestinationType.usdtEthereum) // or usdt_polygon / usdc_solana / …
     .setTtl(600) // seconds. Omit to use the server default. 0 posts as 30 seconds.
     .build();
 
