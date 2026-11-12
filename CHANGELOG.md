@@ -1,6 +1,8 @@
 ## Unreleased
 
-- Added: multi-rail stablecoin destination types `usdt_ethereum`, `usdc_ethereum`, `usdt_bsc`, `usdc_bsc`, `usdt_tron`, `usdt_ton`, `usdt_solana`, `usdc_solana`. `addPayment` encrypts them with a random secret. `verify()` parses `eth:`, `bsc:`, `tron:`, `ton:`, and `sol:` URIs with `branta_id` / `branta_secret` (`secretKeyUriFamilies`), match-if-any within the scheme's family. A bare address is `unknown`.
+- Added: multi-rail stablecoin destination types `usdt_ethereum`, `usdc_ethereum`, `usdt_bsc`, `usdc_bsc`, `usdt_tron`, `usdt_ton`, `usdt_solana`, `usdc_solana`. `addPayment` encrypts them with a random secret. `verify()` parses `eth:`, `bsc:`, `tron:`, `ton:`, and `sol:` URIs with `branta_id` / `branta_secret`, match-if-any within the scheme's family. A bare address is `unknown`. Token is on `matchedDestinations[].type`, not the URI scheme.
+- Changed: `lib/branta.dart` exports only `DestinationType` from the enum library (family lists / `secretKeyUriFamilies` stay internal).
+- Fixed: EVM address compare treats `0X` and `0x` prefixes the same (case-insensitive hex).
 
 ## 4.2.0
 

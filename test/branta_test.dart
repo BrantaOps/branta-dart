@@ -1,4 +1,5 @@
 import 'package:branta/branta.dart';
+import 'package:branta/src/enums/destination_type.dart' hide DestinationType;
 import 'package:branta/src/exceptions/incomplete_error.dart';
 import 'package:branta/src/helpers/aes_gcm_cipher.dart';
 import 'package:branta/src/helpers/branta_extensions.dart';
