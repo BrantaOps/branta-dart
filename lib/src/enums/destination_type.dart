@@ -17,10 +17,6 @@ enum DestinationType {
   const DestinationType(this.jsonValue);
   final String jsonValue;
 
-  /// Polygon EVM secret-key rails. A `pol:` URI maps to this family for verify
-  /// (match-if-any). Token is still the destination type on the payment.
-  bool get isPolygonEvm => polygonEvmDestinationTypes.contains(this);
-
   /// Address rails encrypted with a random branta_secret (not a derived key).
   bool get isSecretKeyAddress =>
       this == DestinationType.bitcoinAddress ||
