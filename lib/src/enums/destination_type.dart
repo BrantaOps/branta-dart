@@ -17,11 +17,6 @@ enum DestinationType {
   const DestinationType(this.jsonValue);
   final String jsonValue;
 
-  /// Address rails encrypted with a random branta_secret (not a derived key).
-  bool get isSecretKeyAddress =>
-      this == DestinationType.bitcoinAddress ||
-      secretKeyUriFamilies.values.any((family) => family.contains(this));
-
   static DestinationType? fromJson(String? value) {
     if (value == null) return null;
     for (final e in DestinationType.values) {
@@ -30,6 +25,12 @@ enum DestinationType {
     return null;
   }
 }
+
+/// Address rails encrypted with a random branta_secret (not a derived key).
+/// Package-private — not re-exported from `package:branta/branta.dart`.
+bool isSecretKeyAddressType(DestinationType type) =>
+    type == DestinationType.bitcoinAddress ||
+    secretKeyUriFamilies.values.any((family) => family.contains(type));
 
 /// Polygon EVM secret-key rails used when verifying a `pol:` URI.
 const List<DestinationType> polygonEvmDestinationTypes = [

@@ -14,7 +14,7 @@ Live example-QR lookups run only when `BRANTA_RUN_INTEGRATION=1`.
 
 ## Layout
 
-Public API is whatever `lib/branta.dart` exports: `BrantaService`, `PaymentBuilder`, `BrantaApiOptions`, `BrantaEnvironment`, `DestinationType`, `VerifyResult`, and the payment models. Export `DestinationType` only from the enum library — do not re-export family lists or `secretKeyUriFamilies`.
+Public API is whatever `lib/branta.dart` exports: `BrantaService`, `PaymentBuilder`, `BrantaApiOptions`, `BrantaEnvironment`, `DestinationType`, `VerifyResult`, and the payment models. Export `DestinationType` only from the enum library — do not re-export family lists, `secretKeyUriFamilies`, or `isSecretKeyAddressType`.
 
 - `lib/src/services/branta_service.dart` orchestrates encrypt/decrypt around HTTP. `branta_client.dart` is the raw HTTP layer. Do not export it.
 - `verify` is the only lookup. A raw on-chain address (including bare `0x`) is `unknown` and does not GET. `addPayment` encrypts a copy.

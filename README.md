@@ -58,6 +58,7 @@ final service = BrantaService(
 final payment = PaymentBuilder()
     .setDescription('Invoice #12345')
     .addDestination('bc1q…', type: DestinationType.bitcoinAddress)
+    .addDestination('0x…', type: DestinationType.usdtEthereum) // or usdt_polygon / usdc_solana / …
     .setTtl(600) // seconds. Omit to use the server default. 0 posts as 30 seconds.
     .build();
 
