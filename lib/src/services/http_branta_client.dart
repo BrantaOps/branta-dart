@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -8,15 +9,21 @@ import '../helpers/branta_extensions.dart';
 import '../interfaces/branta_client.dart';
 import '../models/payment.dart';
 
+/// Default wall-clock timeout for every HTTP call (GET, POST, health-check).
+const Duration httpTimeout = Duration(seconds: 30);
+
 class HttpBrantaClient implements BrantaClient {
   final http.Client _httpClient;
   final BrantaApiOptions _defaultOptions;
+  final Duration _timeout;
 
   HttpBrantaClient({
     required http.Client httpClient,
     required BrantaApiOptions defaultOptions,
+    Duration timeout = httpTimeout,
   }) : _httpClient = httpClient,
-       _defaultOptions = defaultOptions;
+       _defaultOptions = defaultOptions,
+       _timeout = timeout;
 
   @override
   Future<List<Payment>> getPayments(
@@ -28,14 +35,18 @@ class HttpBrantaClient implements BrantaClient {
 
     final http.Response response;
     try {
-      response = await _httpClient.get(
-        Uri.parse('$baseUrl/v2/payments/$encoded'),
-        headers: _buildAuthHeaders(options),
-      );
+      response = await _httpClient
+          .get(
+            Uri.parse('$baseUrl/v2/payments/$encoded'),
+            headers: _buildAuthHeaders(options),
+          )
+          .timeout(_timeout);
     } on IncompleteError {
       rethrow;
     } on BrantaPaymentException {
       rethrow;
+    } on TimeoutException {
+      throw const IncompleteError('Timeout');
     } catch (e) {
       throw IncompleteError(e.toString());
     }
@@ -70,11 +81,13 @@ class HttpBrantaClient implements BrantaClient {
     headers['Content-Type'] = 'application/json';
     _applyHmacHeaders(headers, baseUrl, body, options);
 
-    final response = await _httpClient.post(
-      Uri.parse('$baseUrl/v2/payments'),
-      headers: headers,
-      body: body,
-    );
+    final response = await _httpClient
+        .post(
+          Uri.parse('$baseUrl/v2/payments'),
+          headers: headers,
+          body: body,
+        )
+        .timeout(_timeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BrantaPaymentException(_statusText(response.statusCode));
@@ -89,10 +102,12 @@ class HttpBrantaClient implements BrantaClient {
   @override
   Future<bool> isApiKeyValid({BrantaApiOptions? options}) async {
     final baseUrl = _resolveBaseUrl(options);
-    final response = await _httpClient.get(
-      Uri.parse('$baseUrl/v2/api-keys/health-check'),
-      headers: _buildAuthHeaders(options, requireApiKey: true),
-    );
+    final response = await _httpClient
+        .get(
+          Uri.parse('$baseUrl/v2/api-keys/health-check'),
+          headers: _buildAuthHeaders(options, requireApiKey: true),
+        )
+        .timeout(_timeout);
     return response.statusCode >= 200 && response.statusCode < 300;
   }
 

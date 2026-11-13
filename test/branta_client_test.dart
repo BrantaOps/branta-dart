@@ -202,6 +202,34 @@ void main() {
         throwsA(isA<IncompleteError>()),
       );
     });
+
+    test('default HTTP timeout is 30s', () {
+      expect(httpTimeout, equals(const Duration(seconds: 30)));
+    });
+
+    test('request timeout throws IncompleteError', () async {
+      final httpClient = MockClient((request) async {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        return http.Response('[]', 200);
+      });
+      final client = HttpBrantaClient(
+        httpClient: httpClient,
+        defaultOptions: const BrantaApiOptions(
+          environment: BrantaEnvironment.localhost,
+        ),
+        timeout: const Duration(milliseconds: 1),
+      );
+      await expectLater(
+        client.getPayments('value'),
+        throwsA(
+          isA<IncompleteError>().having(
+            (e) => e.message,
+            'message',
+            equals('Timeout'),
+          ),
+        ),
+      );
+    });
   });
 
   group('HttpBrantaClient.postPayment HTTP errors', () {
