@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -8,15 +9,21 @@ import '../helpers/branta_extensions.dart';
 import '../interfaces/branta_client.dart';
 import '../models/payment.dart';
 
+/// Default wall-clock timeout for every HTTP call (GET, POST, health-check).
+const Duration httpTimeout = Duration(seconds: 30);
+
 class HttpBrantaClient implements BrantaClient {
   final http.Client _httpClient;
   final BrantaApiOptions _defaultOptions;
+  final Duration _timeout;
 
   HttpBrantaClient({
     required http.Client httpClient,
     required BrantaApiOptions defaultOptions,
+    Duration timeout = httpTimeout,
   }) : _httpClient = httpClient,
-       _defaultOptions = defaultOptions;
+       _defaultOptions = defaultOptions,
+       _timeout = timeout;
 
   @override
   Future<List<Payment>> getPayments(
@@ -28,7 +35,8 @@ class HttpBrantaClient implements BrantaClient {
 
     final http.Response response;
     try {
-      response = await _httpClient.get(
+      response = await _send(
+        'GET',
         Uri.parse('$baseUrl/v2/payments/$encoded'),
         headers: _buildAuthHeaders(options),
       );
@@ -36,6 +44,8 @@ class HttpBrantaClient implements BrantaClient {
       rethrow;
     } on BrantaPaymentException {
       rethrow;
+    } on TimeoutException {
+      throw const IncompleteError('Timeout');
     } catch (e) {
       throw IncompleteError(e.toString());
     }
@@ -70,7 +80,8 @@ class HttpBrantaClient implements BrantaClient {
     headers['Content-Type'] = 'application/json';
     _applyHmacHeaders(headers, baseUrl, body, options);
 
-    final response = await _httpClient.post(
+    final response = await _send(
+      'POST',
       Uri.parse('$baseUrl/v2/payments'),
       headers: headers,
       body: body,
@@ -89,11 +100,65 @@ class HttpBrantaClient implements BrantaClient {
   @override
   Future<bool> isApiKeyValid({BrantaApiOptions? options}) async {
     final baseUrl = _resolveBaseUrl(options);
-    final response = await _httpClient.get(
+    final response = await _send(
+      'GET',
       Uri.parse('$baseUrl/v2/api-keys/health-check'),
       headers: _buildAuthHeaders(options, requireApiKey: true),
     );
     return response.statusCode >= 200 && response.statusCode < 300;
+  }
+
+  /// Sends an [http.AbortableRequest] and completes [abortTrigger] when the
+  /// wall-clock timeout elapses so IO/Browser clients cancel the socket.
+  Future<http.Response> _send(
+    String method,
+    Uri url, {
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    final abort = Completer<void>();
+    var timedOut = false;
+    final timer = Timer(_timeout, () {
+      timedOut = true;
+      if (!abort.isCompleted) abort.complete();
+    });
+
+    try {
+      final request = http.AbortableRequest(
+        method,
+        url,
+        abortTrigger: abort.future,
+      );
+      if (headers != null) request.headers.addAll(headers);
+      if (body != null) request.body = body;
+
+      // IOClient / BrowserClient cancel when abortTrigger completes.
+      // MockClient ignores it — race so unit tests still terminate.
+      final result = Completer<http.StreamedResponse>();
+      _httpClient.send(request).then(
+        (streamed) {
+          if (!result.isCompleted) result.complete(streamed);
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!result.isCompleted) result.completeError(error, stack);
+        },
+      );
+      abort.future.then((_) {
+        if (!result.isCompleted) {
+          result.completeError(http.RequestAbortedException(url));
+        }
+      });
+
+      final streamed = await result.future;
+      return await http.Response.fromStream(streamed);
+    } on http.RequestAbortedException {
+      if (timedOut) {
+        throw TimeoutException('Timeout', _timeout);
+      }
+      rethrow;
+    } finally {
+      timer.cancel();
+    }
   }
 
   Map<String, String> _buildAuthHeaders(
