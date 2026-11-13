@@ -1,6 +1,6 @@
 ## 4.3.1
 
-- Fixed: HTTP calls (GET, POST, health-check) use a 30s timeout. A verify GET that times out returns `incomplete`.
+- Fixed: HTTP calls (GET, POST, health-check) use a 30s timeout via `AbortableRequest`, so the underlying request is cancelled (not only the Dart future). A verify GET that times out returns `incomplete`.
 
 ## 4.3.0
 

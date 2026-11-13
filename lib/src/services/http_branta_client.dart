@@ -35,12 +35,11 @@ class HttpBrantaClient implements BrantaClient {
 
     final http.Response response;
     try {
-      response = await _httpClient
-          .get(
-            Uri.parse('$baseUrl/v2/payments/$encoded'),
-            headers: _buildAuthHeaders(options),
-          )
-          .timeout(_timeout);
+      response = await _send(
+        'GET',
+        Uri.parse('$baseUrl/v2/payments/$encoded'),
+        headers: _buildAuthHeaders(options),
+      );
     } on IncompleteError {
       rethrow;
     } on BrantaPaymentException {
@@ -81,13 +80,12 @@ class HttpBrantaClient implements BrantaClient {
     headers['Content-Type'] = 'application/json';
     _applyHmacHeaders(headers, baseUrl, body, options);
 
-    final response = await _httpClient
-        .post(
-          Uri.parse('$baseUrl/v2/payments'),
-          headers: headers,
-          body: body,
-        )
-        .timeout(_timeout);
+    final response = await _send(
+      'POST',
+      Uri.parse('$baseUrl/v2/payments'),
+      headers: headers,
+      body: body,
+    );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw BrantaPaymentException(_statusText(response.statusCode));
@@ -102,13 +100,65 @@ class HttpBrantaClient implements BrantaClient {
   @override
   Future<bool> isApiKeyValid({BrantaApiOptions? options}) async {
     final baseUrl = _resolveBaseUrl(options);
-    final response = await _httpClient
-        .get(
-          Uri.parse('$baseUrl/v2/api-keys/health-check'),
-          headers: _buildAuthHeaders(options, requireApiKey: true),
-        )
-        .timeout(_timeout);
+    final response = await _send(
+      'GET',
+      Uri.parse('$baseUrl/v2/api-keys/health-check'),
+      headers: _buildAuthHeaders(options, requireApiKey: true),
+    );
     return response.statusCode >= 200 && response.statusCode < 300;
+  }
+
+  /// Sends an [http.AbortableRequest] and completes [abortTrigger] when the
+  /// wall-clock timeout elapses so IO/Browser clients cancel the socket.
+  Future<http.Response> _send(
+    String method,
+    Uri url, {
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    final abort = Completer<void>();
+    var timedOut = false;
+    final timer = Timer(_timeout, () {
+      timedOut = true;
+      if (!abort.isCompleted) abort.complete();
+    });
+
+    try {
+      final request = http.AbortableRequest(
+        method,
+        url,
+        abortTrigger: abort.future,
+      );
+      if (headers != null) request.headers.addAll(headers);
+      if (body != null) request.body = body;
+
+      // IOClient / BrowserClient cancel when abortTrigger completes.
+      // MockClient ignores it — race so unit tests still terminate.
+      final result = Completer<http.StreamedResponse>();
+      _httpClient.send(request).then(
+        (streamed) {
+          if (!result.isCompleted) result.complete(streamed);
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!result.isCompleted) result.completeError(error, stack);
+        },
+      );
+      abort.future.then((_) {
+        if (!result.isCompleted) {
+          result.completeError(http.RequestAbortedException(url));
+        }
+      });
+
+      final streamed = await result.future;
+      return await http.Response.fromStream(streamed);
+    } on http.RequestAbortedException {
+      if (timedOut) {
+        throw TimeoutException('Timeout', _timeout);
+      }
+      rethrow;
+    } finally {
+      timer.cancel();
+    }
   }
 
   Map<String, String> _buildAuthHeaders(

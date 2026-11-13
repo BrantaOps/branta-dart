@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:branta/branta.dart';
@@ -229,6 +230,32 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('timeout sends AbortableRequest and completes abortTrigger', () async {
+      final abortSeen = Completer<void>();
+      final httpClient = MockClient.streaming((request, bodyStream) async {
+        expect(request, isA<http.AbortableRequest>());
+        final abortable = request as http.AbortableRequest;
+        expect(abortable.abortTrigger, isNotNull);
+        abortable.abortTrigger!.then((_) {
+          if (!abortSeen.isCompleted) abortSeen.complete();
+        });
+        await Future<void>.delayed(const Duration(seconds: 30));
+        return http.StreamedResponse(Stream.empty(), 200);
+      });
+      final client = HttpBrantaClient(
+        httpClient: httpClient,
+        defaultOptions: const BrantaApiOptions(
+          environment: BrantaEnvironment.localhost,
+        ),
+        timeout: const Duration(milliseconds: 20),
+      );
+      await expectLater(
+        client.getPayments('value'),
+        throwsA(isA<IncompleteError>()),
+      );
+      await abortSeen.future.timeout(const Duration(seconds: 1));
     });
   });
 
