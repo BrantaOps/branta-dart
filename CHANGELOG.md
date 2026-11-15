@@ -1,3 +1,11 @@
+## 4.4.0
+
+- Added: `usdt_base`, `usdc_base`, `usdt_arbitrum`, and `usdc_arbitrum`. `addPayment` encrypts them with the same UUID secret as the other stablecoin address rails.
+- Changed: `verify` now takes EVM USDT and USDC as ERC-681 `ethereum:<token-contract>@<chain-id>/transfer?address=<deposit>&uint256=<amount>`, plus `branta_id` and `branta_secret`. The chain id and token contract select one destination type. `uint256` is not part of the match.
+- Fixed: a `?` after a `#` is no longer read as a query, for `bitcoin:` and ERC-681 URIs alike.
+- Removed: **Breaking.** `verify` no longer accepts `pol:`, `eth:`, `bsc:`, `tron:`, `ton:`, or `sol:`. These return `unknown` without a lookup. Switch EVM stablecoin QR codes to the ERC-681 form above.
+- Notes: `addPayment` still encrypts `usdt_tron`, `usdt_ton`, `usdt_solana`, and `usdc_solana`. They have no verify URI. Matches `@branta-ops/branta` 4.4.0.
+
 ## 4.3.1
 
 - Fixed: HTTP calls (GET, POST, health-check) use a 30s timeout via `AbortableRequest`, so the underlying request is cancelled (not only the Dart future). A verify GET that times out returns `incomplete`.

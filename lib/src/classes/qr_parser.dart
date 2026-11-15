@@ -4,8 +4,7 @@ import '../helpers/branta_extensions.dart';
 class QrDestination {
   final String value;
 
-  /// Known rail type when the scheme or payload names one (e.g. bitcoin).
-  /// Not set for chain URI schemes (`pol:`, `eth:`, `tron:`, …) — token comes from the matched payment destination.
+  /// Rail this value belongs to. Set for bitcoin and ERC-681 transfers.
   final DestinationType? type;
 
   /// True when this instruction is a secret-key address rail for verify.
@@ -85,10 +84,45 @@ DestinationType? _getDestinationType(String text) {
 }
 
 String _queryFromText(String text) {
-  final q = text.indexOf('?');
-  if (q == -1) return '';
-  final hash = text.indexOf('#', q);
-  return text.substring(q, hash == -1 ? text.length : hash);
+  // A "?" after the "#" belongs to the fragment, not the query.
+  final hash = text.indexOf('#');
+  final beforeFragment = hash == -1 ? text : text.substring(0, hash);
+  final q = beforeFragment.indexOf('?');
+  return q == -1 ? '' : beforeFragment.substring(q);
+}
+
+final RegExp _erc681PathPattern = RegExp(
+  r'^(0x[0-9a-fA-F]{40})@([0-9]+)/transfer$',
+);
+final RegExp _evmAddress = RegExp(r'^0x[0-9a-fA-F]{40}$', caseSensitive: false);
+
+/// Path of an ethereum: URI, without scheme, query, or fragment. One leading slash is dropped.
+String _erc681UriPath(String text) {
+  var rest = text.substring(text.indexOf(':') + 1);
+  for (final delimiter in ['?', '#']) {
+    final cut = rest.indexOf(delimiter);
+    if (cut != -1) rest = rest.substring(0, cut);
+  }
+  return rest.startsWith('/') ? rest.substring(1) : rest;
+}
+
+/// ERC-681 token transfer. Chain id and contract select one destination type.
+/// The deposit address is the `address` query param.
+({DestinationType type, String address})? _parseErc681(String text) {
+  final match = _erc681PathPattern.firstMatch(_erc681UriPath(text));
+  if (match == null) return null;
+  final chainDigits = match.group(2)!.replaceFirst(RegExp(r'^0+'), '');
+  // No supported chain id has more than 15 digits. This also keeps the parse
+  // inside int range on every platform.
+  if (chainDigits.length > 15) return null;
+  final type = evmTokenType(
+    chainDigits.isEmpty ? 0 : int.parse(chainDigits),
+    match.group(1)!,
+  );
+  if (type == null) return null;
+  final address = parseQueryString(_queryFromText(text))['address'];
+  if (address == null || !_evmAddress.hasMatch(address)) return null;
+  return (type: type, address: address);
 }
 
 class QRParser {
@@ -96,8 +130,9 @@ class QRParser {
   String? onChainEncryptionText;
   String? onChainEncryptionSecret;
 
-  /// Destination types `verify` may bind for this QR's scheme (match-if-any).
-  /// Set from the URI scheme — not from a token stamped on the address.
+  /// Destination types this scan may decrypt.
+  /// ERC-681 sets one type from the chain id and token contract.
+  /// Bitcoin sets `bitcoin_address`.
   List<DestinationType>? expectedSecretKeyTypes;
 
   /// A payable instruction this SDK cannot bind to a decrypted destination.
@@ -113,14 +148,16 @@ class QRParser {
     }
 
     final scheme = uri.scheme.toLowerCase();
-    final secretKeyFamily = secretKeyUriFamilies[scheme];
-    if (secretKeyFamily != null) {
-      final dest = _getDestination(text);
-      if (dest != null) {
-        // Address only — token comes from the matched payment destination after verify.
-        destinations.add(QrDestination(dest, null, secretKey: true));
-        expectedSecretKeyTypes = List.of(secretKeyFamily);
+    if (scheme == 'ethereum') {
+      final transfer = _parseErc681(text);
+      if (transfer == null) {
+        destinations.add(QrDestination(text, null));
+        return;
       }
+      destinations.add(
+        QrDestination(transfer.address, transfer.type, secretKey: true),
+      );
+      expectedSecretKeyTypes = [transfer.type];
       final queryParams = parseQueryString(_queryFromText(text));
       onChainEncryptionText = queryParams['branta_id'];
       onChainEncryptionSecret = queryParams['branta_secret'];

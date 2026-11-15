@@ -162,5 +162,110 @@ void main() {
         equals(VerifyStatus.unknown),
       );
     });
+
+    // ERC-681 examples from the docs: one transfer per EVM rail, plus a swapped-address copy of five.
+    const evmMatches = <String, String>{
+      'Polygon USDT':
+        'ethereum:0xc2132d05d31c914a87c6611c10748aeb04b58e8f@137/transfer?address=0x278297528c32eCa'
+        '01295B0d2135984d3442ec963&uint256=50000000&branta_id=4WYE9J4TjNitdX7AL%2Fw7frpYdKGwSKHCS5z'
+        'pFXl%2FlQGwpsQi4%2Fgv5MxgujPFzYMbIKqg2rtyYGpzJCllEA6Qudbi7lLkiA%3D%3D&branta_secret=c0fab1'
+        'ee-1526-4efa-b991-9ee138a44cd2',
+      'Polygon USDC':
+        'ethereum:0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359@137/transfer?address=0xAb5801a7D398351'
+        'b8bE11C439e05C5B3259aeC9B&uint256=50000000&branta_id=8rnGGWZcg%2Fg3He1OK6yZ6OLOEyusldwIDao'
+        'PImRzWjoUGguyXKotuF8ZlGbCZN9TRqx3PdXjvHDdwffdVvIZxmZ00xJvxA%3D%3D&branta_secret=0515039f-2'
+        'c31-4467-b62a-4e919079a44e',
+      'Ethereum USDT':
+        'ethereum:0xdAC17F958D2ee523a2206206994597C13D831ec7@1/transfer?address=0xBF555025393918743'
+        '2Ef4dccE8089765d3DCb47f&uint256=1000000&branta_id=hEdYLfbK2EqIn7Sj3Z7o6MVOcwOtPmA9eup2Xt3b'
+        '58MzqVmu5RnLKh1WcEn5086MgRznzA7vtdw04YpQo9%2BJPzDATs7MGQ%3D%3D&branta_secret=a8065c37-6728'
+        '-487e-b94a-58990fa494f4',
+      'Ethereum USDC':
+        'ethereum:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48@1/transfer?address=0x11111111111111111'
+        '11111111111111111111112&uint256=1000000&branta_id=kZfmySkTUMNBaltxtHmPwulVBnXTWhPTV%2Byvgb'
+        'wciaikaJNobP%2BQSO5lnxnhWPp1QiULnzas%2Brh%2FYCZSMotBN2lmbPDI5A%3D%3D&branta_secret=3e8ba7a'
+        '8-f7b2-4ec5-bd78-aced1e2ec747',
+      'BNB USDT':
+        'ethereum:0x55d398326f99059fF775485246999027B3197955@56/transfer?address=0x1111111111111111'
+        '111111111111111111111113&uint256=1000000000000000000&branta_id=mkuZIr%2BgINAnuduVhc5cj5N3%'
+        '2FlmqYKntp28Vl4MyEkmI%2F%2BgXFuJ3qCT4TJq4js2UkYVWQMCSa7%2Bc15%2BPqv13ncsqx9daEA%3D%3D&bran'
+        'ta_secret=15a81c25-62dc-4dc9-8c45-4aa7965235a1',
+      'BNB USDC':
+        'ethereum:0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d@56/transfer?address=0x1111111111111111'
+        '111111111111111111111114&uint256=1000000000000000000&branta_id=lnOeOCF%2BtcA3WPbDLiKThwXQj'
+        'GwKXRnKleDRo7vLEpRyvfeb%2BNvH9FIFXv2lppn39%2Bi%2For1aMtA%2F814DjFAg0sH2hARAzw%3D%3D&branta'
+        '_secret=0edd3453-4249-4d54-aa06-5329b6d506c7',
+      'Base USDT':
+        'ethereum:0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2@8453/transfer?address=0x11111111111111'
+        '11111111111111111111111115&uint256=1000000&branta_id=vBvqB0uhBi6objCfmXR%2B4cvofi%2FSwC08%'
+        '2BCANwZrDPFVKfTg24qBWk6xuBoPifgofkUkK8q3n3a3Djh9nb%2Bh%2B8%2FaC%2Bh%2FjVw%3D%3D&branta_sec'
+        'ret=5f204ca2-8c06-47ee-b339-8df769ec4988',
+      'Base USDC':
+        'ethereum:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913@8453/transfer?address=0x11111111111111'
+        '11111111111111111111111116&uint256=1000000&branta_id=4y98sndEJvATBQawsOIcank8PyVpdUhfk2X4Z'
+        '7FTok6P%2BdsOZE7xY%2F%2FiIbmYFMnEwbLN%2BdcKcX0ipyFg3jKEQcb3zB%2F8XA%3D%3D&branta_secret=82'
+        'af0fe5-14ce-400d-8a66-22c8bc9f2af8',
+      'Arbitrum USDT':
+        'ethereum:0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9@42161/transfer?address=0x1111111111111'
+        '111111111111111111111111117&uint256=1000000&branta_id=mfFg02EOgLqYr8LHE%2FFUrNtHKsHbKG2qIx'
+        '8flxggEoYZiYELfgMu67F2BdBsPi9HLQ6PtJPm%2FATA4GxOps2Fgby9jpe1Hg%3D%3D&branta_secret=53d713a'
+        'd-f65e-4af1-b83c-b9f46500c0d5',
+      'Arbitrum USDC':
+        'ethereum:0xaf88d065e77c8cC2239327C5EDb3A432268e5831@42161/transfer?address=0x1111111111111'
+        '111111111111111111111111118&uint256=1000000&branta_id=SFlYfTXtcslM7BM07KJYow6YzeoijFMpQAse'
+        'sIRDbphUzXsaHggmMximxaWhv178SssuaxhbDrqHk5KJAqKXqfwKegFpbQ%3D%3D&branta_secret=e7d829e9-18'
+        'da-4831-aba7-678645e22c95',
+    };
+    const evmTampered = <String, String>{
+      'Tampered Polygon USDT':
+        'ethereum:0xc2132d05d31c914a87c6611c10748aeb04b58e8f@137/transfer?address=0x222222222222222'
+        '2222222222222222222222222&uint256=50000000&branta_id=4WYE9J4TjNitdX7AL%2Fw7frpYdKGwSKHCS5z'
+        'pFXl%2FlQGwpsQi4%2Fgv5MxgujPFzYMbIKqg2rtyYGpzJCllEA6Qudbi7lLkiA%3D%3D&branta_secret=c0fab1'
+        'ee-1526-4efa-b991-9ee138a44cd2',
+      'Tampered Ethereum USDT':
+        'ethereum:0xdAC17F958D2ee523a2206206994597C13D831ec7@1/transfer?address=0x22222222222222222'
+        '22222222222222222222222&uint256=1000000&branta_id=hEdYLfbK2EqIn7Sj3Z7o6MVOcwOtPmA9eup2Xt3b'
+        '58MzqVmu5RnLKh1WcEn5086MgRznzA7vtdw04YpQo9%2BJPzDATs7MGQ%3D%3D&branta_secret=a8065c37-6728'
+        '-487e-b94a-58990fa494f4',
+      'Tampered BNB USDT':
+        'ethereum:0x55d398326f99059fF775485246999027B3197955@56/transfer?address=0x2222222222222222'
+        '222222222222222222222222&uint256=1000000000000000000&branta_id=mkuZIr%2BgINAnuduVhc5cj5N3%'
+        '2FlmqYKntp28Vl4MyEkmI%2F%2BgXFuJ3qCT4TJq4js2UkYVWQMCSa7%2Bc15%2BPqv13ncsqx9daEA%3D%3D&bran'
+        'ta_secret=15a81c25-62dc-4dc9-8c45-4aa7965235a1',
+      'Tampered Base USDT':
+        'ethereum:0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2@8453/transfer?address=0x22222222222222'
+        '22222222222222222222222222&uint256=1000000&branta_id=vBvqB0uhBi6objCfmXR%2B4cvofi%2FSwC08%'
+        '2BCANwZrDPFVKfTg24qBWk6xuBoPifgofkUkK8q3n3a3Djh9nb%2Bh%2B8%2FaC%2Bh%2FjVw%3D%3D&branta_sec'
+        'ret=5f204ca2-8c06-47ee-b339-8df769ec4988',
+      'Tampered Arbitrum USDT':
+        'ethereum:0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9@42161/transfer?address=0x2222222222222'
+        '222222222222222222222222222&uint256=1000000&branta_id=mfFg02EOgLqYr8LHE%2FFUrNtHKsHbKG2qIx'
+        '8flxggEoYZiYELfgMu67F2BdBsPi9HLQ6PtJPm%2FATA4GxOps2Fgby9jpe1Hg%3D%3D&branta_secret=53d713a'
+        'd-f65e-4af1-b83c-b9f46500c0d5',
+    };
+
+    evmMatches.forEach((name, uri) {
+      test('$name returns a match', () async {
+        final result = await service.verify(uri);
+        expect(result.status, equals(VerifyStatus.match));
+        expect(result.matchedDestinations, isNotEmpty);
+      });
+    });
+
+    evmTampered.forEach((name, uri) {
+      test('$name with a swapped address returns tampered', () async {
+        final result = await service.verify(uri);
+        expect(result.status, equals(VerifyStatus.tampered));
+        expect(result.payments, isEmpty);
+        expect(result.verifyUrl, isNot(contains('#k-')));
+      });
+    });
+
+    test('a bare 0x address returns unknown', () async {
+      expect(
+        (await service.verify('0x278297528c32eCa01295B0d2135984d3442ec963')).status,
+        equals(VerifyStatus.unknown),
+      );
+    });
   }, skip: skipLive);
 }
