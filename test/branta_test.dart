@@ -357,6 +357,45 @@ void _setupDefaultMocks(MockAesEncryption aes) {
 
 void main() {
   group('AesGcmCipher', () {
+    // Fixed vectors. Every Branta SDK asserts the same strings, so a payment
+    // written by one SDK stays readable and findable by every other. Do not
+    // regenerate these from this code.
+    test('encrypt fixed vector matches every sdk', () async {
+      expect(
+        await AesGcmCipher.encrypt(
+          'hello world',
+          'my-secret',
+          deterministicNonce: true,
+        ),
+        equals('mPIKHc3ywVlsBHf3Lv2Rwpz2+fKE0kgUePq2m4fPIUidMuGEHVIB'),
+      );
+    });
+
+    test('decrypt fixed vector returns plaintext', () async {
+      expect(
+        await AesGcmCipher.decrypt(
+          'mPIKHc3ywVlsBHf3Lv2Rwpz2+fKE0kgUePq2m4fPIUidMuGEHVIB',
+          'my-secret',
+        ),
+        equals('hello world'),
+      );
+    });
+
+    test('encrypt derived key fixed vector matches every sdk', () async {
+      // Key is the normalized hash of 'LNBC10U1PTestInvoice'. The value is
+      // encrypted lowercased.
+      const key =
+          '261D7974DC0541402A222AC17973D3FF412878C1C179FCD4D866094D610B4496';
+      expect(
+        await AesGcmCipher.encrypt(
+          'lnbc10u1ptestinvoice',
+          key,
+          deterministicNonce: true,
+        ),
+        equals('WywBRexAiHTi2mnHK/W1DIN79bF1XVhU3BdC3DWpUsdhs5NMbdyZyzWsdjfuFgIV'),
+      );
+    });
+
     test('encrypt and decrypt round-trips', () async {
       const address = '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
       const secret = 'test-secret';
@@ -451,6 +490,19 @@ void main() {
         equals(DestinationType.silentPayment),
       );
       expect(_bitcoinAddress.getDerivedKeyType(), isNull);
+    });
+
+    // Fixed vectors, asserted by every Branta SDK.
+    test('toNormalizedHash fixed vector matches every sdk', () {
+      const test = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08';
+      expect('test'.toNormalizedHash(), equals(test));
+      expect('TEST'.toNormalizedHash(), equals(test));
+      expect(
+        'LNBC10U1PTestInvoice'.toNormalizedHash(),
+        equals(
+          '261D7974DC0541402A222AC17973D3FF412878C1C179FCD4D866094D610B4496',
+        ),
+      );
     });
 
     test('toNormalizedHash returns 64-char uppercase hex and ignores case', () {
