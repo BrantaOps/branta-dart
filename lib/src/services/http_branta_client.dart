@@ -56,13 +56,19 @@ class HttpBrantaClient implements BrantaClient {
     }
     if (response.body.isEmpty) return [];
 
-    final decoded = jsonDecode(response.body);
-    final payments = decoded is List
-        ? decoded
-              .whereType<Map>()
-              .map((e) => Payment.fromJson(Map<String, dynamic>.from(e)))
-              .toList()
-        : <Payment>[];
+    final List<Payment> payments;
+    try {
+      final decoded = jsonDecode(response.body);
+      payments = decoded is List
+          ? decoded
+                .whereType<Map>()
+                .map((e) => Payment.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
+          : <Payment>[];
+    } catch (_) {
+      // Not JSON, or a row with the wrong shape. The lookup did not finish.
+      throw const IncompleteError('Malformed response body');
+    }
 
     _verifyLogoUrls(baseUrl, payments);
     return payments;
