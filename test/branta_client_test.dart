@@ -259,6 +259,82 @@ void main() {
     });
   });
 
+  group('HttpBrantaClient.getPayments malformed body', () {
+    test('a body that is not JSON throws IncompleteError', () async {
+      for (final body in [
+        'not json',
+        '<html>502 Bad Gateway</html>',
+        '[{"a":',
+      ]) {
+        final client = clientWithResponse(body);
+        await expectLater(
+          client.getPayments('value'),
+          throwsA(isA<IncompleteError>()),
+          reason: body,
+        );
+      }
+    });
+
+    test('a row with the wrong shape throws IncompleteError', () async {
+      for (final rows in [
+        [
+          {'ttl': 'soon'},
+        ],
+        [
+          {'metadata': 5},
+        ],
+        [
+          {'platform': 7},
+        ],
+      ]) {
+        final client = clientWithResponse(rows);
+        await expectLater(
+          client.getPayments('value'),
+          throwsA(isA<IncompleteError>()),
+          reason: jsonEncode(rows),
+        );
+      }
+    });
+
+    test('valid JSON that is not a list is an empty result', () async {
+      for (final body in ['{}', 'null', '"text"', '42']) {
+        final client = clientWithResponse(body);
+        expect(await client.getPayments('value'), isEmpty, reason: body);
+      }
+    });
+
+    test('a logo on the wrong origin still throws, not incomplete', () async {
+      final client = clientWithResponse([
+        {
+          'destinations': destinations,
+          'platform_logo_url': '$otherOrigin/logo.png',
+        },
+      ]);
+      await expectLater(
+        client.getPayments('value'),
+        throwsA(isA<BrantaPaymentException>()),
+      );
+    });
+
+    test(
+      'verify returns incomplete with a verifyUrl, and does not throw',
+      () async {
+        final service = BrantaService(
+          environment: BrantaEnvironment.localhost,
+          httpClient: MockClient(
+            (request) async => http.Response('<html>', 200),
+          ),
+        );
+        final result = await service.verify(
+          'bitcoin:bc1qgw3dzmhnyvcswc9r0v0z0ajtp8ulm4nuyeahwr?branta_id=abc&branta_secret=def',
+        );
+        expect(result.status, equals(VerifyStatus.incomplete));
+        expect(result.payments, isEmpty);
+        expect(result.verifyUrl, equals('$sameOrigin/v2/verify/abc'));
+      },
+    );
+  });
+
   group('HttpBrantaClient.postPayment HTTP errors', () {
     final payment = Payment(
       destinations: [Destination(value: 'test-destination')],
