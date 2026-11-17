@@ -68,12 +68,4 @@ final result = await service.addPayment(payment);
 
 Every destination is encrypted. `addPayment` encrypts a copy, so a failed post can be retried with the same `Payment`. Description is stored in encrypted metadata. It accepts the types on [Destination types](https://developer.branta.pro/destination-types), and [Encryption](https://developer.branta.pro/setup/receive/encryption) says which key each uses. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
 
-## Publishing
-
-- Update `version` in `pubspec.yaml`
-- `dart pub login`
-- `dart pub publish`
-
-## Responsible Disclosure
-
-Found critical bugs or vulnerabilities? Email them to support@branta.pro.
+[Security](SECURITY.md)

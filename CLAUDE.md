@@ -30,6 +30,8 @@ make coverage
 
 Live example-QR lookups run only when `BRANTA_RUN_INTEGRATION=1`.
 
+Release: bump `version` in `pubspec.yaml`, add a `CHANGELOG.md` entry, `dart pub publish`, then tag the release commit `vX.Y.Z` and push the tag. Do not publish until asked.
+
 ## Layout
 
 Public API is whatever `lib/branta.dart` exports: `BrantaService`, `PaymentBuilder`, `BrantaApiOptions`, `BrantaEnvironment`, `DestinationType`, `VerifyResult`, and the payment models. Export `DestinationType` only from the enum library — do not re-export `evmTokenRails`, `evmTokenType`, or `isSecretKeyAddressType`.
