@@ -68,25 +68,6 @@ final result = await service.addPayment(payment);
 
 Every destination is encrypted. `addPayment` encrypts a copy, so a failed post can be retried with the same `Payment`. Description is stored in encrypted metadata. It accepts the types on [Destination types](https://developer.branta.pro/destination-types), and [Encryption](https://developer.branta.pro/setup/receive/encryption) says which key each uses. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
 
-Per-client parent platforms pass the child key per call:
-
-```dart
-await service.addPayment(
-  payment,
-  options: BrantaApiOptions(apiKey: '<child-api-key>'),
-);
-```
-
-Shared-key parent platforms tag the child on the builder:
-
-```dart
-PaymentBuilder()
-    .setDescription('Invoice #12345')
-    .addDestination('bc1q…', type: DestinationType.bitcoinAddress)
-    .setChildPlatform('ChildBrand', logoUrl: 'https://example.com/logo.png')
-    .build();
-```
-
 ## Publishing
 
 - Update `version` in `pubspec.yaml`
