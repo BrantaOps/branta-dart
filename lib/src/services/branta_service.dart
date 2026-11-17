@@ -98,7 +98,7 @@ String? _uniformOnChainAddress(QRParser parser) {
   return first;
 }
 
-/// Scheme → rail family from the parser (match-if-any within the set).
+/// The types this scan may decrypt: one ERC-681 rail, or bitcoin.
 Set<DestinationType>? _expectedSecretKeyTypes(QRParser parser) {
   final types = parser.expectedSecretKeyTypes;
   if (types == null || types.isEmpty) return null;
@@ -326,7 +326,7 @@ class BrantaService {
       if (!destination.isEncrypted) continue;
       final type = destination.type;
       if (type == null || !isSecretKeyAddressType(type)) continue;
-      // Outside this QR's rail family (e.g. bitcoin when scanning pol:) — leave encrypted.
+      // Not the type this scan names (for example bitcoin on an ERC-681 scan) — leave encrypted.
       if (expectedOnChainTypes != null && !expectedOnChainTypes.contains(type)) {
         continue;
       }
@@ -344,7 +344,7 @@ class BrantaService {
         continue;
       }
       decryptedExpectedRail = true;
-      // Match-if-any within the family: a sibling rail with a different address stays encrypted.
+      // A decrypted value that is not the scanned address stays encrypted.
       if (expectedOnChainAddress != null &&
           !_addressesMatch(decrypted, expectedOnChainAddress)) {
         continue;
@@ -356,7 +356,7 @@ class BrantaService {
       if (id != null) keys.putIfAbsent(id, () => encryptionKey);
       await _tryDecryptMetadata(payment, destination, encryptionKey);
     }
-    // Tampered only when a family rail decrypted and none matched the scanned address.
+    // Tampered only when a destination of the scanned type decrypted and none matched the address.
     if (expectedOnChainAddress != null &&
         !onChainBound &&
         decryptedExpectedRail) {

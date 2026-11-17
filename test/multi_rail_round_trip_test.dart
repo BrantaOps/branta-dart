@@ -2,6 +2,7 @@ import 'dart:io' as io;
 import 'dart:math';
 
 import 'package:branta/branta.dart';
+import 'package:branta/src/enums/destination_type.dart' hide DestinationType;
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 
@@ -27,17 +28,28 @@ class _MetricsHttpClient extends http.BaseClient {
 class _SecretKeyRail {
   const _SecretKeyRail({
     required this.type,
-    required this.scheme,
     required this.address,
     required this.swapped,
     this.caseFold = false,
   });
 
   final DestinationType type;
-  final String scheme;
   final String address;
   final String swapped;
   final bool caseFold;
+}
+
+/// Encrypted by addPayment, but there is no verify URI for them.
+class _PostOnlyRail {
+  const _PostOnlyRail({
+    required this.type,
+    required this.scheme,
+    required this.address,
+  });
+
+  final DestinationType type;
+  final String scheme;
+  final String address;
 }
 
 String _uniq() {
@@ -46,86 +58,120 @@ String _uniq() {
   return '$now$rand';
 }
 
+EvmTokenRail _railFor(DestinationType type) =>
+    evmTokenRails.firstWhere((rail) => rail.type == type);
+
+String _brantaQuery(String encrypted, String secret) =>
+    'branta_id=${Uri.encodeComponent(encrypted)}&branta_secret=${Uri.encodeComponent(secret)}';
+
+/// bitcoin: URI for bitcoin, ERC-681 transfer URI for every EVM rail.
 String _secretKeyUri(
-  String scheme,
+  DestinationType type,
   String recipient,
   String encrypted,
   String secret,
-) =>
-    '$scheme:$recipient?branta_id=${Uri.encodeComponent(encrypted)}&branta_secret=${Uri.encodeComponent(secret)}';
+) {
+  if (type == DestinationType.bitcoinAddress) {
+    return 'bitcoin:$recipient?${_brantaQuery(encrypted, secret)}';
+  }
+  final rail = _railFor(type);
+  return 'ethereum:${rail.contract}@${rail.chainId}/transfer?address=$recipient&uint256=1000000&${_brantaQuery(encrypted, secret)}';
+}
+
+String _uriWithoutBranta(DestinationType type, String recipient) {
+  if (type == DestinationType.bitcoinAddress) return 'bitcoin:$recipient';
+  final rail = _railFor(type);
+  return 'ethereum:${rail.contract}@${rail.chainId}/transfer?address=$recipient&uint256=1000000';
+}
 
 const _secretKeyRails = <_SecretKeyRail>[
   _SecretKeyRail(
     type: DestinationType.bitcoinAddress,
-    scheme: 'bitcoin',
     address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
     swapped: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
   ),
   _SecretKeyRail(
     type: DestinationType.usdtPolygon,
-    scheme: 'pol',
     address: '0x278297528c32eCa01295B0d2135984d3442ec963',
     swapped: '0x1111111111111111111111111111111111111111',
     caseFold: true,
   ),
   _SecretKeyRail(
     type: DestinationType.usdcPolygon,
-    scheme: 'pol',
     address: '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B',
     swapped: '0x2222222222222222222222222222222222222222',
     caseFold: true,
   ),
   _SecretKeyRail(
     type: DestinationType.usdtEthereum,
-    scheme: 'eth',
     address: '0xBF5550253939187432Ef4dccE8089765d3DCb47f',
     swapped: '0x3333333333333333333333333333333333333333',
     caseFold: true,
   ),
   _SecretKeyRail(
     type: DestinationType.usdcEthereum,
-    scheme: 'eth',
     address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     swapped: '0x4444444444444444444444444444444444444444',
     caseFold: true,
   ),
   _SecretKeyRail(
     type: DestinationType.usdtBsc,
-    scheme: 'bsc',
     address: '0x55d398326f99059fF775485246999027B3197955',
     swapped: '0x5555555555555555555555555555555555555555',
     caseFold: true,
   ),
   _SecretKeyRail(
     type: DestinationType.usdcBsc,
-    scheme: 'bsc',
     address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
     swapped: '0x6666666666666666666666666666666666666666',
     caseFold: true,
   ),
   _SecretKeyRail(
+    type: DestinationType.usdcBase,
+    address: '0x1111111111111111111111111111111111111112',
+    swapped: '0x1111111111111111111111111111111111111113',
+    caseFold: true,
+  ),
+  _SecretKeyRail(
+    type: DestinationType.usdtBase,
+    address: '0x1111111111111111111111111111111111111114',
+    swapped: '0x1111111111111111111111111111111111111115',
+    caseFold: true,
+  ),
+  _SecretKeyRail(
+    type: DestinationType.usdcArbitrum,
+    address: '0x1111111111111111111111111111111111111116',
+    swapped: '0x1111111111111111111111111111111111111117',
+    caseFold: true,
+  ),
+  _SecretKeyRail(
+    type: DestinationType.usdtArbitrum,
+    address: '0x1111111111111111111111111111111111111118',
+    swapped: '0x1111111111111111111111111111111111111119',
+    caseFold: true,
+  ),
+];
+
+const _postOnlyRails = <_PostOnlyRail>[
+  _PostOnlyRail(
     type: DestinationType.usdtTron,
     scheme: 'tron',
     address: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb',
-    swapped: 'TXyZ1111111111111111111111111111111',
   ),
-  _SecretKeyRail(
+  _PostOnlyRail(
     type: DestinationType.usdtTon,
     scheme: 'ton',
     address: 'EQDtFpEwcFAEcRe5mLVh2N6C0y-_tur3BYOM93pEZPw390by',
-    swapped: 'EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c',
   ),
-  _SecretKeyRail(
+  _PostOnlyRail(
     type: DestinationType.usdtSolana,
     scheme: 'sol',
     address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-    swapped: '11111111111111111111111111111111',
   ),
-  _SecretKeyRail(
+  _PostOnlyRail(
     type: DestinationType.usdcSolana,
     scheme: 'sol',
     address: '7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDofycyinf',
-    swapped: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
   ),
 ];
 
@@ -174,7 +220,7 @@ void main() {
           expect(encrypted, isNot(equals(rail.address)));
 
           final match = await service.verify(
-            _secretKeyUri(rail.scheme, rail.address, encrypted, secret),
+            _secretKeyUri(rail.type, rail.address, encrypted, secret),
           );
           expect(match.status, equals(VerifyStatus.match));
           expect(match.matchedDestinations, hasLength(1));
@@ -194,7 +240,7 @@ void main() {
           if (rail.caseFold) {
             final folded = await service.verify(
               _secretKeyUri(
-                rail.scheme,
+                rail.type,
                 rail.address.toLowerCase(),
                 encrypted,
                 secret,
@@ -204,7 +250,7 @@ void main() {
           }
 
           final tampered = await service.verify(
-            _secretKeyUri(rail.scheme, rail.swapped, encrypted, secret),
+            _secretKeyUri(rail.type, rail.swapped, encrypted, secret),
           );
           expect(tampered.status, equals(VerifyStatus.tampered));
 
@@ -213,9 +259,34 @@ void main() {
             equals(VerifyStatus.unknown),
           );
           expect(
-            (await service.verify('${rail.scheme}:${rail.address}')).status,
+            (await service.verify(_uriWithoutBranta(rail.type, rail.address)))
+                .status,
             equals(VerifyStatus.unknown),
           );
+        },
+        timeout: const Timeout(Duration(seconds: 45)),
+      );
+    }
+
+    for (final rail in _postOnlyRails) {
+      test(
+        'post-only ${rail.type.jsonValue}: encrypts but does not verify',
+        () async {
+          final payment = PaymentBuilder()
+              .addDestination(rail.address, type: rail.type)
+              .setTtl(180)
+              .build();
+
+          final created = await service.addPayment(payment);
+          final encrypted = created.payment.destinations.single.value;
+
+          expect(created.payment.destinations.single.type, equals(rail.type));
+          expect(encrypted, isNot(equals(rail.address)));
+
+          final result = await service.verify(
+            '${rail.scheme}:${rail.address}?${_brantaQuery(encrypted, created.secret)}',
+          );
+          expect(result.status, equals(VerifyStatus.unknown));
         },
         timeout: const Timeout(Duration(seconds: 45)),
       );
@@ -263,7 +334,7 @@ void main() {
     }
 
     test(
-      'cross-scheme: eth URI must not bind a polygon-only payment',
+      'cross-chain: an Ethereum USDT scan must not bind a Polygon-only payment',
       () async {
         const address = '0x278297528c32eCa01295B0d2135984d3442ec963';
         final payment = PaymentBuilder()
@@ -276,12 +347,17 @@ void main() {
         final secret = created.secret;
 
         final cross = await service.verify(
-          _secretKeyUri('eth', address, encrypted, secret),
+          _secretKeyUri(
+            DestinationType.usdtEthereum,
+            address,
+            encrypted,
+            secret,
+          ),
         );
         expect(cross.status, equals(VerifyStatus.unknown));
 
         final correct = await service.verify(
-          _secretKeyUri('pol', address, encrypted, secret),
+          _secretKeyUri(DestinationType.usdtPolygon, address, encrypted, secret),
         );
         expect(correct.status, equals(VerifyStatus.match));
       },
@@ -289,7 +365,7 @@ void main() {
     );
 
     test(
-      'match-if-any: eth dual-token payment binds scanned rail only',
+      'an Ethereum dual-token payment binds only the scanned token',
       () async {
         const usdt = '0xBF5550253939187432Ef4dccE8089765d3DCb47f';
         const usdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
@@ -304,7 +380,12 @@ void main() {
         final secret = created.secret;
 
         final matchUsdt = await service.verify(
-          _secretKeyUri('eth', usdt, encryptedUsdt, secret),
+          _secretKeyUri(
+            DestinationType.usdtEthereum,
+            usdt,
+            encryptedUsdt,
+            secret,
+          ),
         );
         expect(matchUsdt.status, equals(VerifyStatus.match));
         expect(
@@ -317,7 +398,12 @@ void main() {
         expect(usdcDest.isEncrypted, isTrue);
 
         final matchUsdc = await service.verify(
-          _secretKeyUri('eth', usdc, encryptedUsdt, secret),
+          _secretKeyUri(
+            DestinationType.usdcEthereum,
+            usdc,
+            encryptedUsdt,
+            secret,
+          ),
         );
         expect(matchUsdc.status, equals(VerifyStatus.match));
         expect(
@@ -327,7 +413,7 @@ void main() {
 
         final swapped = await service.verify(
           _secretKeyUri(
-            'eth',
+            DestinationType.usdtEthereum,
             '0x9999999999999999999999999999999999999999',
             encryptedUsdt,
             secret,

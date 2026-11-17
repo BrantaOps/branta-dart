@@ -27,7 +27,7 @@ switch (result.status) {
   case VerifyStatus.match:
     // Show the card for result.payments.first. Link it to result.verifyUrl.
     // What to send is result.matchedDestinations — each has type + plaintext value.
-    // e.g. usdt_polygon / usdc_polygon / bitcoin_address / bolt11. Do not infer token from pol:.
+    // e.g. usdt_polygon / usdc_base / bitcoin_address / bolt11. Pay from matchedDestinations, not from the raw QR.
     break;
   case VerifyStatus.unknown:
     // Not in Branta — show nothing.
@@ -41,7 +41,7 @@ switch (result.status) {
 }
 ```
 
-On-chain Bitcoin needs a `bitcoin:` URI with `branta_id` / `branta_secret`. Stablecoin rails need a chain URI with the same params — `pol:` (`usdt_polygon`, `usdc_polygon`), `eth:` (`usdt_ethereum`, `usdc_ethereum`), `bsc:` (`usdt_bsc`, `usdc_bsc`), `tron:` (`usdt_tron`), `ton:` (`usdt_ton`), `sol:` (`usdt_solana`, `usdc_solana`). Token is on `matchedDestinations[].type`, not the URI scheme; verify is match-if-any within the scheme's family. bolt11, Ark, and silent payments resolve from the value. A bare address (including bare `0x`) is `unknown`.
+On-chain Bitcoin needs a `bitcoin:` URI with `branta_id` / `branta_secret`. EVM stablecoins (USDT and USDC on Ethereum, Polygon, BNB Smart Chain, Base, and Arbitrum) need an ERC-681 `ethereum:<token-contract>@<chain-id>/transfer?address=<deposit>` URI with the same params. The chain id and token contract select the destination type, and `uint256` is not part of the match. `pol:`, `eth:`, `bsc:`, `tron:`, `ton:`, and `sol:` do not verify. bolt11, Ark, and silent payments resolve from the value. A bare address (including bare `0x`) is `unknown`. Tron, TON, and Solana rails encrypt on `addPayment` but have no verify URI.
 
 A 404 is `unknown`. 5xx, 429, no network, or a 30s HTTP timeout is `incomplete`. `verifyUrl` is always returned.
 
@@ -58,7 +58,7 @@ final service = BrantaService(
 final payment = PaymentBuilder()
     .setDescription('Invoice #12345')
     .addDestination('bc1q…', type: DestinationType.bitcoinAddress)
-    .addDestination('0x…', type: DestinationType.usdtEthereum) // or usdt_polygon / usdc_solana / …
+    .addDestination('0x…', type: DestinationType.usdtEthereum) // or usdc_base / usdt_arbitrum / usdc_solana / …
     .setTtl(600) // seconds. Omit to use the server default. 0 posts as 30 seconds.
     .build();
 
