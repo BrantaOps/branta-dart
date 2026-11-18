@@ -2,7 +2,7 @@
 
 Dart and Flutter SDK for [Branta](https://developer.branta.pro).
 
-Use `verify()` on send and `addPayment()` on receive. Status handling and parent platforms are in the [developer docs](https://developer.branta.pro).
+Status handling and parent platforms are in the [developer docs](https://developer.branta.pro).
 
 ## Install
 
@@ -16,7 +16,7 @@ dart pub add branta
 import 'package:branta/branta.dart';
 
 final service = BrantaService(
-  environment: BrantaEnvironment.production, // staging everywhere else
+  environment: BrantaEnvironment.production,
 );
 
 final result = await service.verify(input); // scanned QR or pasted text
@@ -39,7 +39,7 @@ switch (result.status) {
 }
 ```
 
-Pass the scanned or pasted text to `verify`. A Bitcoin or EVM stablecoin lookup needs `branta_id` and `branta_secret` in the URI. bolt11, Ark, and silent payments resolve from the value. A bare address is `unknown`. The full rules are on [Status rules](https://developer.branta.pro/setup/send/status-rules), and supported chains and contracts are on [Destination types](https://developer.branta.pro/destination-types).
+Rules for each status: [Status rules](https://developer.branta.pro/setup/send/status-rules). Supported types: [Destination types](https://developer.branta.pro/destination-types).
 
 ## Receive
 
@@ -54,14 +54,14 @@ final service = BrantaService(
 final payment = PaymentBuilder()
     .setDescription('Invoice #12345')
     .addDestination('bc1q…', type: DestinationType.bitcoinAddress)
-    .addDestination('0x…', type: DestinationType.usdtEthereum) // or usdc_base / usdt_arbitrum / usdc_solana / …
     .setTtl(600) // seconds. Omit to use the server default. 0 posts as 30 seconds.
     .build();
 
 final result = await service.addPayment(payment);
 // Store result.secret with the invoice. Put branta_id and branta_secret on the QR.
+// Link the sender to result.verifyUrl.
 ```
 
-Every destination is encrypted. `addPayment` accepts the types on [Destination types](https://developer.branta.pro/destination-types), and [Encryption](https://developer.branta.pro/setup/receive/encryption) says which key each uses. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
+`addPayment` accepts the types on [Destination types](https://developer.branta.pro/destination-types). Pass the type for stablecoins. A bare address is not auto-detected. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
 
 [Security](SECURITY.md)
