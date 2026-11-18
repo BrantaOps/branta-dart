@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Breaking:** `verify` no longer accepts `pol:`, `eth:`, `bsc:`, `tron:`, `ton:`, or `sol:`. These return `unknown` without a lookup. Switch EVM stablecoin QR codes to the ERC-681 form above.
 
 ### Notes
-- `addPayment` still encrypts `usdt_tron`, `usdt_ton`, `usdt_solana`, and `usdc_solana`. They have no verify URI. Matches `@branta-ops/branta` 4.4.0.
+- `addPayment` still encrypts `usdt_tron`, `usdt_ton`, `usdt_solana`, and `usdc_solana`. They have no verify URI.
 
 ## [4.3.1] - 2026-11-13
 
@@ -49,7 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `DestinationType.isPolygonEvm` and `DestinationType.isSecretKeyAddress` (secret-key classification stays package-internal via `isSecretKeyAddressType`).
 
 ### Notes
-- `usdc_ton` is deferred until a platform names a concrete TON USDC jetton. Matches `@branta-ops/branta` / `branta` Python 4.3.0.
+- `usdc_ton` is deferred until a platform names a concrete TON USDC jetton.
 
 ## [4.2.0] - 2026-11-10
 
