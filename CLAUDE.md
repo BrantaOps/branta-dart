@@ -1,6 +1,6 @@
 # Branta Dart SDK
 
-Dart SDK published as `branta` on pub.dev. Consumers (wallets, platforms, parent platforms) call `BrantaService` to look up or post payments to Branta's V2 API. `README.md` is the install, constructor, and samples guide.
+Dart SDK published as `branta` on pub.dev. Consumers (wallets, platforms, parent platforms) call `BrantaService` to look up or post payments to Branta. `README.md` is the install, constructor, and samples guide.
 
 ## Behavior contract
 
