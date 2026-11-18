@@ -10,8 +10,6 @@ Use `verify()` on send and `addPayment()` on receive. Status handling and parent
 dart pub add branta
 ```
 
-Requires Dart `^3.10.4`.
-
 ## Send
 
 ```dart
@@ -64,6 +62,6 @@ final result = await service.addPayment(payment);
 // Store result.secret with the invoice. Put branta_id and branta_secret on the QR.
 ```
 
-Every destination is encrypted. `addPayment` encrypts a copy, so a failed post can be retried with the same `Payment`. Description is stored in encrypted metadata. It accepts the types on [Destination types](https://developer.branta.pro/destination-types), and [Encryption](https://developer.branta.pro/setup/receive/encryption) says which key each uses. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
+Every destination is encrypted. `addPayment` accepts the types on [Destination types](https://developer.branta.pro/destination-types), and [Encryption](https://developer.branta.pro/setup/receive/encryption) says which key each uses. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
 
 [Security](SECURITY.md)
