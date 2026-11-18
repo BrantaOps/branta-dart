@@ -1,5 +1,5 @@
 name: branta
-description: A Branta SDK for Dart.
+description: "Dart and Flutter SDK for Branta: verify a payment destination or register one."
 version: 4.4.0
 repository: https://github.com/BrantaOps/branta-dart
 
