@@ -63,5 +63,3 @@ final result = await service.addPayment(payment);
 ```
 
 `addPayment` accepts the types on [Destination types](https://developer.branta.pro/destination-types). Pass the type for stablecoins. A bare address is not auto-detected. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
-
-[Security](SECURITY.md)
