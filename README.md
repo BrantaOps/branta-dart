@@ -25,7 +25,7 @@ switch (result.status) {
   case VerifyStatus.match:
     // Show the card for result.payments.first. Link it to result.verifyUrl.
     // What to send is result.matchedDestinations — each has type + plaintext value.
-    // e.g. usdt_polygon / usdc_base / bitcoin_address / bolt11. Pay from matchedDestinations, not from the raw QR.
+    // Pay from matchedDestinations, not from the raw QR.
     break;
   case VerifyStatus.unknown:
     // Not in Branta — show nothing.
