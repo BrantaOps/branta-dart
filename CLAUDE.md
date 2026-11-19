@@ -18,6 +18,7 @@ Invariants that break silently. Check them before you change `verify` or `addPay
 ## Dart specifics
 
 - A logo-domain mismatch throws `BrantaPaymentException`.
+- `hmacSecret` signs `POST /v2/payments` for platforms with Require HMAC on. It is not deprecated.
 - `DestinationType` is only what `addPayment` accepts. It also includes `usdt_tron`, `usdt_ton`, `usdt_solana`, and `usdc_solana`. They can be posted but no URI verifies them, and they are not on the public Destination types page. There is no `usdc_ton`.
 
 ## Commands
