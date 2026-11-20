@@ -63,3 +63,15 @@ final result = await service.addPayment(payment);
 ```
 
 `addPayment` accepts the types on [Destination types](https://developer.branta.pro/destination-types). Pass the type for stablecoins. A bare address is not auto-detected. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
+
+### HMAC signing
+
+If Branta enabled Require HMAC on your platform, create a Secret in Guardrail and pass it as `hmacSecret`. The service signs each `addPayment`. Keep it server-side. See [HMAC signing](https://developer.branta.pro/setup/receive/hmac-signing).
+
+```dart
+final service = BrantaService(
+  environment: BrantaEnvironment.production,
+  apiKey: '<api-key>',
+  hmacSecret: '<secret>',
+);
+```
