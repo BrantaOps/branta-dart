@@ -13,6 +13,7 @@ Invariants that break silently. Check them before you change `verify` or `addPay
 - The token is `matchedDestinations[].type`, never the URI scheme.
 - A logo-domain mismatch throws. Every other lookup failure is a status.
 - `addPayment` encrypts a copy and leaves the caller's `Payment` unchanged.
+- The payment POST sends `X-Branta-SDK: <language>/<version>`. A GET never does. [SDK header](https://developer.branta.pro/tech/api/receive#sdk-header)
 - Keep parity with every 4.x Branta SDK. A public method added or changed here is mirrored in each of them.
 
 ## Dart specifics
@@ -31,7 +32,7 @@ make coverage
 
 Live example-QR lookups run only when `BRANTA_RUN_INTEGRATION=1`.
 
-Release: bump `version` in `pubspec.yaml`, add a `CHANGELOG.md` entry, `dart pub publish`, then tag the release commit `vX.Y.Z` and push the tag. Do not publish until asked.
+Release: bump `version` in `pubspec.yaml` and `brantaSdkVersion` in `lib/src/sdk_version.dart` (a test checks they match), add a `CHANGELOG.md` entry, `dart pub publish`, then tag the release commit `vX.Y.Z` and push the tag. Do not publish until asked.
 
 ## Layout
 
