@@ -64,6 +64,23 @@ final result = await service.addPayment(payment);
 
 `addPayment` accepts the types on [Destination types](https://developer.branta.pro/destination-types). Pass the type for stablecoins. A bare address is not auto-detected. `usdtTron`, `usdtTon`, `usdtSolana`, and `usdcSolana` also encrypt and post, but no URI verifies them.
 
+### Brand
+
+A platform that posts with a shared key can tag a payment with the payee (the brand): a name plus optional logo URLs.
+
+```dart
+final payment = PaymentBuilder()
+    .addDestination('bc1q…', type: DestinationType.bitcoinAddress)
+    .setBrand(
+      'Acme',
+      logoUrl: 'https://…/logo.png',
+      logoLightUrl: 'https://…/logo-light.png',
+    )
+    .build();
+```
+
+`setChildPlatform` and `Payment.childPlatform` are the deprecated old names. They still work: `setChildPlatform` calls `setBrand`, and a Payment with only `childPlatform` set is sent as `brand`. The SDK sends `brand`, so it needs a Branta server that accepts it.
+
 ### HMAC signing
 
 If Branta enabled Require HMAC on your platform, create a Secret in Guardrail and pass it as `hmacSecret`. The service signs each `addPayment`. Keep it server-side. See [HMAC signing](https://developer.branta.pro/setup/receive/hmac-signing).

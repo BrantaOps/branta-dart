@@ -6,6 +6,7 @@ import '../enums/destination_type.dart';
 import '../exceptions/branta_payment_exception.dart';
 import '../exceptions/incomplete_error.dart';
 import '../helpers/branta_extensions.dart';
+import '../helpers/effective_brand.dart';
 import '../classes/uuid_secret_generator.dart';
 import '../classes/qr_parser.dart';
 import '../classes/aes_encryption_service.dart';
@@ -68,7 +69,7 @@ Payment _copyPayment(Payment payment) {
     platformLogoUrl: payment.platformLogoUrl,
     platformLogoLightUrl: payment.platformLogoLightUrl,
     parentPlatform: copyPlatform(payment.parentPlatform),
-    childPlatform: copyPlatform(payment.childPlatform),
+    brand: copyPlatform(payment.effectiveBrand),
   );
 }
 
@@ -83,9 +84,7 @@ bool _addressesMatch(String a, String b) {
 }
 
 Iterable<QrDestination> _secretKeyDestinations(QRParser parser) =>
-    parser.destinations.where(
-      (d) => d.secretKey && d.value.trim().isNotEmpty,
-    );
+    parser.destinations.where((d) => d.secretKey && d.value.trim().isNotEmpty);
 
 /// The single secret-key address every such instruction agrees on, or null if there is none.
 String? _uniformOnChainAddress(QRParser parser) {
@@ -327,7 +326,8 @@ class BrantaService {
       final type = destination.type;
       if (type == null || !isSecretKeyAddressType(type)) continue;
       // Not the type this scan names (for example bitcoin on an ERC-681 scan) — leave encrypted.
-      if (expectedOnChainTypes != null && !expectedOnChainTypes.contains(type)) {
+      if (expectedOnChainTypes != null &&
+          !expectedOnChainTypes.contains(type)) {
         continue;
       }
       if (encryptionKey == null) continue;

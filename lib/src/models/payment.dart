@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../helpers/effective_brand.dart';
 import 'destination.dart';
 import 'platform.dart';
 
@@ -15,6 +16,12 @@ class Payment {
   String? platformLogoUrl;
   String? platformLogoLightUrl;
   Platform? parentPlatform;
+
+  /// The payee a shared-key platform tags the payment with. Sent as `brand`.
+  Platform? brand;
+
+  /// Deprecated alias of [brand]. If both are set, [brand] wins.
+  @Deprecated('Use brand')
   Platform? childPlatform;
 
   /// Runtime-only flag set after metadata decryption. Not serialized.
@@ -30,12 +37,19 @@ class Payment {
     this.platformLogoUrl,
     this.platformLogoLightUrl,
     this.parentPlatform,
-    this.childPlatform,
+    this.brand,
+    @Deprecated('Use brand') this.childPlatform,
     this.isMetadataDecrypted = false,
   });
 
   factory Payment.fromJson(Map<String, dynamic> json) {
     final destinationsRaw = json['destinations'];
+    // `brand` wins over the deprecated `child_platform`. The value is mirrored
+    // into the deprecated field so existing readers keep working.
+    Platform? parsePlatform(Object? raw) =>
+        raw is Map ? Platform.fromJson(Map<String, dynamic>.from(raw)) : null;
+    final parsedBrand =
+        parsePlatform(json['brand']) ?? parsePlatform(json['child_platform']);
     return Payment(
       destinations: destinationsRaw is List
           ? destinationsRaw
@@ -56,25 +70,26 @@ class Payment {
               Map<String, dynamic>.from(json['parent_platform'] as Map),
             )
           : null,
-      childPlatform: json['child_platform'] is Map
-          ? Platform.fromJson(
-              Map<String, dynamic>.from(json['child_platform'] as Map),
-            )
-          : null,
+      brand: parsedBrand,
+      // ignore: deprecated_member_use_from_same_package
+      childPlatform: parsedBrand,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'destinations': destinations.map((d) => d.toJson()).toList(),
-    if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
-    if (ttl != null) 'ttl': ttl,
-    if (metadata != null) 'metadata': metadata,
-    if (platform != null) 'platform': platform,
-    if (platformLogoUrl != null) 'platform_logo_url': platformLogoUrl,
-    if (platformLogoLightUrl != null)
-      'platform_logo_light_url': platformLogoLightUrl,
-    if (childPlatform != null) 'child_platform': childPlatform!.toJson(),
-  };
+  Map<String, dynamic> toJson() {
+    final effectiveBrand = this.effectiveBrand;
+    return {
+      'destinations': destinations.map((d) => d.toJson()).toList(),
+      if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
+      if (ttl != null) 'ttl': ttl,
+      if (metadata != null) 'metadata': metadata,
+      if (platform != null) 'platform': platform,
+      if (platformLogoUrl != null) 'platform_logo_url': platformLogoUrl,
+      if (platformLogoLightUrl != null)
+        'platform_logo_light_url': platformLogoLightUrl,
+      if (effectiveBrand != null) 'brand': effectiveBrand.toJson(),
+    };
+  }
 }
 
 Map<String, dynamic> parseMetadataMap(String? metadata) {
