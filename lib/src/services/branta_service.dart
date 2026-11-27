@@ -84,7 +84,9 @@ bool _addressesMatch(String a, String b) {
 }
 
 Iterable<QrDestination> _secretKeyDestinations(QRParser parser) =>
-    parser.destinations.where((d) => d.secretKey && d.value.trim().isNotEmpty);
+    parser.destinations.where(
+      (d) => d.secretKey && d.value.trim().isNotEmpty,
+    );
 
 /// The single secret-key address every such instruction agrees on, or null if there is none.
 String? _uniformOnChainAddress(QRParser parser) {
@@ -326,8 +328,7 @@ class BrantaService {
       final type = destination.type;
       if (type == null || !isSecretKeyAddressType(type)) continue;
       // Not the type this scan names (for example bitcoin on an ERC-681 scan) — leave encrypted.
-      if (expectedOnChainTypes != null &&
-          !expectedOnChainTypes.contains(type)) {
+      if (expectedOnChainTypes != null && !expectedOnChainTypes.contains(type)) {
         continue;
       }
       if (encryptionKey == null) continue;

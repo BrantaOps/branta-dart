@@ -184,19 +184,16 @@ const String _swappedAddress = '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2';
 const String _encryptedBitcoinAddress = 'encrypted-bitcoin-address';
 const String _secret = 'test-secret';
 const String _usdtPolygonAddress = '0x278297528c32eCa01295B0d2135984d3442ec963';
-const String _usdtPolygonAddressLower =
-    '0x278297528c32eca01295b0d2135984d3442ec963';
+const String _usdtPolygonAddressLower = '0x278297528c32eca01295b0d2135984d3442ec963';
 const String _usdcPolygonAddress = '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B';
 const String _swappedUsdtPolygonAddress =
     '0x1111111111111111111111111111111111111111';
 const String _encryptedUsdtPolygonAddress = 'encrypted-usdt-polygon-address';
 const String _encryptedUsdcPolygonAddress = 'encrypted-usdc-polygon-address';
 final String _swappedEvmAddress = '0x${'f' * 40}';
-const String _usdtEthereumAddress =
-    '0xBF5550253939187432Ef4dccE8089765d3DCb47f';
+const String _usdtEthereumAddress = '0xBF5550253939187432Ef4dccE8089765d3DCb47f';
 const String _encryptedUsdtEthereumAddress = 'encrypted-usdt-ethereum-address';
-const String _usdcEthereumAddress =
-    '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+const String _usdcEthereumAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
 const String _encryptedUsdcEthereumAddress = 'encrypted-usdc-ethereum-address';
 const String _usdtBscAddress = '0x55d398326f99059fF775485246999027B3197955';
 const String _encryptedUsdtBscAddress = 'encrypted-usdt-bsc-address';
@@ -207,11 +204,9 @@ const String _encryptedUsdtTronAddress = 'encrypted-usdt-tron-address';
 const String _usdtTonAddress =
     'EQDtFpEwcFAEcRe5mLVh2N6C0y-_tur3BYOM93pEZPw390by';
 const String _encryptedUsdtTonAddress = 'encrypted-usdt-ton-address';
-const String _usdtSolanaAddress =
-    'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+const String _usdtSolanaAddress = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
 const String _encryptedUsdtSolanaAddress = 'encrypted-usdt-solana-address';
-const String _usdcSolanaAddress =
-    '7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDofycyinf';
+const String _usdcSolanaAddress = '7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDofycyinf';
 const String _encryptedUsdcSolanaAddress = 'encrypted-usdc-solana-address';
 
 EvmTokenRail _railFor(DestinationType type) =>
@@ -233,7 +228,8 @@ String _transferUri(
 /// and a lowercase scan still differs from the stored text.
 final Map<DestinationType, String> _railDeposits = {
   for (var i = 0; i < evmTokenRails.length; i++)
-    evmTokenRails[i].type: '0xAb${(i + 1).toRadixString(16).padLeft(38, '1')}',
+    evmTokenRails[i].type:
+        '0xAb${(i + 1).toRadixString(16).padLeft(38, '1')}',
 };
 
 const String _baseUsdcContract = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
@@ -249,22 +245,24 @@ const String _encryptedBech32 = 'encrypted-bech32-address';
 String _brantaUsdtPolygonLookup([
   String address = _usdtPolygonAddress,
   String secret = _secret,
-]) => _transferUri(
-  DestinationType.usdtPolygon,
-  address,
-  _encryptedUsdtPolygonAddress,
-  secret: secret,
-);
+]) =>
+    _transferUri(
+      DestinationType.usdtPolygon,
+      address,
+      _encryptedUsdtPolygonAddress,
+      secret: secret,
+    );
 
 String _brantaUsdcPolygonLookup([
   String address = _usdcPolygonAddress,
   String secret = _secret,
-]) => _transferUri(
-  DestinationType.usdcPolygon,
-  address,
-  _encryptedUsdcPolygonAddress,
-  secret: secret,
-);
+]) =>
+    _transferUri(
+      DestinationType.usdcPolygon,
+      address,
+      _encryptedUsdcPolygonAddress,
+      secret: secret,
+    );
 
 final String _bolt11Hash = _bolt11Invoice.toNormalizedHash();
 final String _arkHash = _arkAddress.toNormalizedHash();
@@ -319,8 +317,16 @@ void _setupDefaultMocks(MockAesEncryption aes) {
   );
   aes.setupDecryptResult(_encryptedBolt11, _bolt11Hash, _bolt11Invoice);
   aes.setupEncrypt(_bitcoinAddress, _secret, _encryptedBitcoinAddress);
-  aes.setupEncrypt(_usdtPolygonAddress, _secret, _encryptedUsdtPolygonAddress);
-  aes.setupEncrypt(_usdcPolygonAddress, _secret, _encryptedUsdcPolygonAddress);
+  aes.setupEncrypt(
+    _usdtPolygonAddress,
+    _secret,
+    _encryptedUsdtPolygonAddress,
+  );
+  aes.setupEncrypt(
+    _usdcPolygonAddress,
+    _secret,
+    _encryptedUsdcPolygonAddress,
+  );
   aes.setupDecryptResult(
     _encryptedUsdtEthereumAddress,
     _secret,
@@ -331,10 +337,26 @@ void _setupDefaultMocks(MockAesEncryption aes) {
     _secret,
     _usdcEthereumAddress,
   );
-  aes.setupDecryptResult(_encryptedUsdtBscAddress, _secret, _usdtBscAddress);
-  aes.setupDecryptResult(_encryptedUsdcBscAddress, _secret, _usdcBscAddress);
-  aes.setupDecryptResult(_encryptedUsdtTronAddress, _secret, _usdtTronAddress);
-  aes.setupDecryptResult(_encryptedUsdtTonAddress, _secret, _usdtTonAddress);
+  aes.setupDecryptResult(
+    _encryptedUsdtBscAddress,
+    _secret,
+    _usdtBscAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdcBscAddress,
+    _secret,
+    _usdcBscAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdtTronAddress,
+    _secret,
+    _usdtTronAddress,
+  );
+  aes.setupDecryptResult(
+    _encryptedUsdtTonAddress,
+    _secret,
+    _usdtTonAddress,
+  );
   aes.setupDecryptResult(
     _encryptedUsdtSolanaAddress,
     _secret,
@@ -346,16 +368,8 @@ void _setupDefaultMocks(MockAesEncryption aes) {
     _usdcSolanaAddress,
   );
   aes.setupEncrypt(_usdtTronAddress, _secret, _encryptedUsdtTronAddress);
-  aes.setupEncrypt(
-    _usdtEthereumAddress,
-    _secret,
-    _encryptedUsdtEthereumAddress,
-  );
-  aes.setupEncrypt(
-    _usdcEthereumAddress,
-    _secret,
-    _encryptedUsdcEthereumAddress,
-  );
+  aes.setupEncrypt(_usdtEthereumAddress, _secret, _encryptedUsdtEthereumAddress);
+  aes.setupEncrypt(_usdcEthereumAddress, _secret, _encryptedUsdcEthereumAddress);
   aes.setupEncrypt(_usdtBscAddress, _secret, _encryptedUsdtBscAddress);
   aes.setupEncrypt(_usdcBscAddress, _secret, _encryptedUsdcBscAddress);
   aes.setupEncrypt(_usdtTonAddress, _secret, _encryptedUsdtTonAddress);
@@ -407,9 +421,7 @@ void main() {
           key,
           deterministicNonce: true,
         ),
-        equals(
-          'WywBRexAiHTi2mnHK/W1DIN79bF1XVhU3BdC3DWpUsdhs5NMbdyZyzWsdjfuFgIV',
-        ),
+        equals('WywBRexAiHTi2mnHK/W1DIN79bF1XVhU3BdC3DWpUsdhs5NMbdyZyzWsdjfuFgIV'),
       );
     });
 
@@ -511,8 +523,7 @@ void main() {
 
     // Fixed vectors, asserted by every Branta SDK.
     test('toNormalizedHash fixed vector matches every sdk', () {
-      const test =
-          '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08';
+      const test = '9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08';
       expect('test'.toNormalizedHash(), equals(test));
       expect('TEST'.toNormalizedHash(), equals(test));
       expect(
@@ -567,17 +578,14 @@ void main() {
     });
 
     for (final rail in evmTokenRails) {
-      test(
-        'every rail binds the deposit and one type: ${rail.type.jsonValue}',
-        () {
-          final parser = QRParser(
-            'ethereum:${rail.contract}@${rail.chainId}/transfer?address=$_deposit&branta_id=a&branta_secret=b',
-          );
-          expect(parser.destination, equals(_deposit));
-          expect(parser.destinationType, equals(rail.type));
-          expect(parser.expectedSecretKeyTypes, equals([rail.type]));
-        },
-      );
+      test('every rail binds the deposit and one type: ${rail.type.jsonValue}', () {
+        final parser = QRParser(
+          'ethereum:${rail.contract}@${rail.chainId}/transfer?address=$_deposit&branta_id=a&branta_secret=b',
+        );
+        expect(parser.destination, equals(_deposit));
+        expect(parser.destinationType, equals(rail.type));
+        expect(parser.expectedSecretKeyTypes, equals([rail.type]));
+      });
     }
 
     test('ERC-681 contract matches case-insensitively', () {
@@ -800,31 +808,28 @@ void main() {
       );
     });
 
-    test(
-      'isSecretKeyAddressType covers bitcoin, EVM rails, and post-only types',
-      () {
-        expect(isSecretKeyAddressType(DestinationType.bitcoinAddress), isTrue);
-        for (final rail in evmTokenRails) {
-          expect(
-            isSecretKeyAddressType(rail.type),
-            isTrue,
-            reason: rail.type.jsonValue,
-          );
-        }
-        // Tron, TON, and Solana still encrypt on addPayment. They have no verify URI.
-        for (final type in [
-          DestinationType.usdtTron,
-          DestinationType.usdtTon,
-          DestinationType.usdtSolana,
-          DestinationType.usdcSolana,
-        ]) {
-          expect(isSecretKeyAddressType(type), isTrue, reason: type.jsonValue);
-        }
-        expect(isSecretKeyAddressType(DestinationType.bolt11), isFalse);
-        expect(isSecretKeyAddressType(DestinationType.arkAddress), isFalse);
-        expect(isSecretKeyAddressType(DestinationType.silentPayment), isFalse);
-      },
-    );
+    test('isSecretKeyAddressType covers bitcoin, EVM rails, and post-only types', () {
+      expect(isSecretKeyAddressType(DestinationType.bitcoinAddress), isTrue);
+      for (final rail in evmTokenRails) {
+        expect(
+          isSecretKeyAddressType(rail.type),
+          isTrue,
+          reason: rail.type.jsonValue,
+        );
+      }
+      // Tron, TON, and Solana still encrypt on addPayment. They have no verify URI.
+      for (final type in [
+        DestinationType.usdtTron,
+        DestinationType.usdtTon,
+        DestinationType.usdtSolana,
+        DestinationType.usdcSolana,
+      ]) {
+        expect(isSecretKeyAddressType(type), isTrue, reason: type.jsonValue);
+      }
+      expect(isSecretKeyAddressType(DestinationType.bolt11), isFalse);
+      expect(isSecretKeyAddressType(DestinationType.arkAddress), isFalse);
+      expect(isSecretKeyAddressType(DestinationType.silentPayment), isFalse);
+    });
 
     test('DestinationType.fromJson reads the Base and Arbitrum types', () {
       expect(DestinationType.fromJson('usdt_tron'), DestinationType.usdtTron);
@@ -1098,70 +1103,64 @@ void main() {
       );
     });
 
-    test(
-      'Polygon transfer looks up branta_id, ignores amount query, and decrypts',
-      () async {
-        client.setupGetPayments(_encryptedUsdtPolygonAddress, [
-          _encryptedPayment(
-            _encryptedUsdtPolygonAddress,
-            DestinationType.usdtPolygon,
-          ),
-        ]);
+    test('Polygon transfer looks up branta_id, ignores amount query, and decrypts', () async {
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdtPolygonAddress,
+          DestinationType.usdtPolygon,
+        ),
+      ]);
 
-        final result = await service.verify(_brantaUsdtPolygonLookup());
+      final result = await service.verify(_brantaUsdtPolygonLookup());
 
-        expect(
-          client.getPaymentsCalls.single.address,
-          equals(_encryptedUsdtPolygonAddress),
-        );
-        expect(result.status, equals(VerifyStatus.match));
-        expect(
-          result.payments.single.destinations.single.value,
-          equals(_usdtPolygonAddress),
-        );
-        expect(
-          result.payments.single.destinations.single.type,
-          equals(DestinationType.usdtPolygon),
-        );
-        expect(result.matchedDestinations, hasLength(1));
-        expect(
-          result.matchedDestinations.single.type,
-          equals(DestinationType.usdtPolygon),
-        );
-        expect(
-          result.matchedDestinations.single.value,
-          equals(_usdtPolygonAddress),
-        );
-      },
-    );
+      expect(
+        client.getPaymentsCalls.single.address,
+        equals(_encryptedUsdtPolygonAddress),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.payments.single.destinations.single.value,
+        equals(_usdtPolygonAddress),
+      );
+      expect(
+        result.payments.single.destinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+      expect(result.matchedDestinations, hasLength(1));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdtPolygonAddress),
+      );
+    });
 
-    test(
-      'Polygon transfer verifies usdc_polygon and returns matchedDestinations',
-      () async {
-        client.setupGetPayments(_encryptedUsdcPolygonAddress, [
-          _encryptedPayment(
-            _encryptedUsdcPolygonAddress,
-            DestinationType.usdcPolygon,
-          ),
-        ]);
+    test('Polygon transfer verifies usdc_polygon and returns matchedDestinations', () async {
+      client.setupGetPayments(_encryptedUsdcPolygonAddress, [
+        _encryptedPayment(
+          _encryptedUsdcPolygonAddress,
+          DestinationType.usdcPolygon,
+        ),
+      ]);
 
-        final result = await service.verify(_brantaUsdcPolygonLookup());
+      final result = await service.verify(_brantaUsdcPolygonLookup());
 
-        expect(
-          client.getPaymentsCalls.single.address,
-          equals(_encryptedUsdcPolygonAddress),
-        );
-        expect(result.status, equals(VerifyStatus.match));
-        expect(
-          result.matchedDestinations.single.type,
-          equals(DestinationType.usdcPolygon),
-        );
-        expect(
-          result.matchedDestinations.single.value,
-          equals(_usdcPolygonAddress),
-        );
-      },
-    );
+      expect(
+        client.getPaymentsCalls.single.address,
+        equals(_encryptedUsdcPolygonAddress),
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdcPolygon),
+      );
+      expect(
+        result.matchedDestinations.single.value,
+        equals(_usdcPolygonAddress),
+      );
+    });
 
     test('Polygon transfer with a swapped usdc address is tampered', () async {
       client.setupGetPayments(_encryptedUsdcPolygonAddress, [
@@ -1178,31 +1177,28 @@ void main() {
       expect(result.matchedDestinations, isEmpty);
     });
 
-    test(
-      'Polygon transfer verify binds only the matching rail when usdt and usdc differ',
-      () async {
-        final payment = PaymentBuilder()
-            .addDestination(
-              _encryptedUsdtPolygonAddress,
-              type: DestinationType.usdtPolygon,
-            )
-            .addDestination(
-              _encryptedUsdcPolygonAddress,
-              type: DestinationType.usdcPolygon,
-            )
-            .build();
-        client.setupGetPayments(_encryptedUsdtPolygonAddress, [payment]);
+    test('Polygon transfer verify binds only the matching rail when usdt and usdc differ', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedUsdtPolygonAddress,
+            type: DestinationType.usdtPolygon,
+          )
+          .addDestination(
+            _encryptedUsdcPolygonAddress,
+            type: DestinationType.usdcPolygon,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [payment]);
 
-        final result = await service.verify(_brantaUsdtPolygonLookup());
-        expect(result.status, equals(VerifyStatus.match));
-        expect(result.matchedDestinations, hasLength(1));
-        expect(
-          result.matchedDestinations.single.type,
-          equals(DestinationType.usdtPolygon),
-        );
-        expect(result.payments.single.destinations[1].isEncrypted, isTrue);
-      },
-    );
+      final result = await service.verify(_brantaUsdtPolygonLookup());
+      expect(result.status, equals(VerifyStatus.match));
+      expect(result.matchedDestinations, hasLength(1));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+      expect(result.payments.single.destinations[1].isEncrypted, isTrue);
+    });
 
     test('Polygon transfer address compare is case-insensitive', () async {
       client.setupGetPayments(_encryptedUsdtPolygonAddress, [
@@ -1252,25 +1248,22 @@ void main() {
         final deposit = _railDeposits[type]!;
         final encrypted = 'encrypted-${type.jsonValue}';
 
-        test(
-          '${type.jsonValue} matches and returns the scanned type',
-          () async {
-            aes.setupDecryptResult(encrypted, _secret, deposit);
-            client.setupGetPayments(encrypted, [
-              _encryptedPayment(encrypted, type),
-            ]);
+        test('${type.jsonValue} matches and returns the scanned type', () async {
+          aes.setupDecryptResult(encrypted, _secret, deposit);
+          client.setupGetPayments(encrypted, [
+            _encryptedPayment(encrypted, type),
+          ]);
 
-            final result = await service.verify(
-              _transferUri(type, deposit, encrypted),
-            );
+          final result = await service.verify(
+            _transferUri(type, deposit, encrypted),
+          );
 
-            expect(result.status, equals(VerifyStatus.match));
-            expect(client.getPaymentsCalls.single.address, equals(encrypted));
-            expect(result.matchedDestinations, hasLength(1));
-            expect(result.matchedDestinations.single.type, equals(type));
-            expect(result.matchedDestinations.single.value, equals(deposit));
-          },
-        );
+          expect(result.status, equals(VerifyStatus.match));
+          expect(client.getPaymentsCalls.single.address, equals(encrypted));
+          expect(result.matchedDestinations, hasLength(1));
+          expect(result.matchedDestinations.single.type, equals(type));
+          expect(result.matchedDestinations.single.value, equals(deposit));
+        });
 
         test('${type.jsonValue} still matches a lowercase deposit', () async {
           aes.setupDecryptResult(encrypted, _secret, deposit);
@@ -1299,31 +1292,25 @@ void main() {
           expect(result.matchedDestinations, isEmpty);
         });
 
-        test(
-          '${type.jsonValue} on the wrong chain is unknown without a GET',
-          () async {
-            final uri =
-                'ethereum:${rail.contract}@999999/transfer?address=$deposit&branta_id=${Uri.encodeComponent(encrypted)}&branta_secret=$_secret';
+        test('${type.jsonValue} on the wrong chain is unknown without a GET', () async {
+          final uri =
+              'ethereum:${rail.contract}@999999/transfer?address=$deposit&branta_id=${Uri.encodeComponent(encrypted)}&branta_secret=$_secret';
 
-            final result = await service.verify(uri);
+          final result = await service.verify(uri);
 
-            expect(result.status, equals(VerifyStatus.unknown));
-            expect(client.getPaymentsCalls, isEmpty);
-          },
-        );
+          expect(result.status, equals(VerifyStatus.unknown));
+          expect(client.getPaymentsCalls, isEmpty);
+        });
 
-        test(
-          '${type.jsonValue} without branta params is unknown without a GET',
-          () async {
-            final uri =
-                'ethereum:${rail.contract}@${rail.chainId}/transfer?address=$deposit&uint256=1000000';
+        test('${type.jsonValue} without branta params is unknown without a GET', () async {
+          final uri =
+              'ethereum:${rail.contract}@${rail.chainId}/transfer?address=$deposit&uint256=1000000';
 
-            final result = await service.verify(uri);
+          final result = await service.verify(uri);
 
-            expect(result.status, equals(VerifyStatus.unknown));
-            expect(client.getPaymentsCalls, isEmpty);
-          },
-        );
+          expect(result.status, equals(VerifyStatus.unknown));
+          expect(client.getPaymentsCalls, isEmpty);
+        });
       }
     });
 
@@ -1349,64 +1336,58 @@ void main() {
       }
     });
 
-    test(
-      'Ethereum scan ignores a sibling bitcoin rail on the same payment',
-      () async {
-        final payment = PaymentBuilder()
-            .addDestination(
-              _encryptedBitcoinAddress,
-              type: DestinationType.bitcoinAddress,
-            )
-            .addDestination(
-              _encryptedUsdtEthereumAddress,
-              type: DestinationType.usdtEthereum,
-            )
-            .build();
-        client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
-
-        final result = await service.verify(
-          _transferUri(
-            DestinationType.usdtEthereum,
-            _usdtEthereumAddress,
+    test('Ethereum scan ignores a sibling bitcoin rail on the same payment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
             _encryptedUsdtEthereumAddress,
-          ),
-        );
+            type: DestinationType.usdtEthereum,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
 
-        expect(result.status, equals(VerifyStatus.match));
-        expect(result.payments.single.destinations[0].isEncrypted, isTrue);
-        expect(
-          result.matchedDestinations.single.type,
-          equals(DestinationType.usdtEthereum),
-        );
-      },
-    );
+      final result = await service.verify(
+        _transferUri(
+          DestinationType.usdtEthereum,
+          _usdtEthereumAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
 
-    test(
-      'Ethereum swapped deposit is still tampered when a sibling bitcoin rail is present',
-      () async {
-        final payment = PaymentBuilder()
-            .addDestination(
-              _encryptedBitcoinAddress,
-              type: DestinationType.bitcoinAddress,
-            )
-            .addDestination(
-              _encryptedUsdtEthereumAddress,
-              type: DestinationType.usdtEthereum,
-            )
-            .build();
-        client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
+      expect(result.status, equals(VerifyStatus.match));
+      expect(result.payments.single.destinations[0].isEncrypted, isTrue);
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtEthereum),
+      );
+    });
 
-        final result = await service.verify(
-          _transferUri(
-            DestinationType.usdtEthereum,
-            _swappedEvmAddress,
+    test('Ethereum swapped deposit is still tampered when a sibling bitcoin rail is present', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
             _encryptedUsdtEthereumAddress,
-          ),
-        );
+            type: DestinationType.usdtEthereum,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
 
-        expect(result.status, equals(VerifyStatus.tampered));
-      },
-    );
+      final result = await service.verify(
+        _transferUri(
+          DestinationType.usdtEthereum,
+          _swappedEvmAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+
+      expect(result.status, equals(VerifyStatus.tampered));
+    });
 
     test('a dual-token payment binds only the scanned token', () async {
       Payment dualToken() => PaymentBuilder()
@@ -1506,35 +1487,32 @@ void main() {
       expect(result.matchedDestinations, isEmpty);
     });
 
-    test(
-      'an Ethereum scan leaves a Polygon rail in the same payment encrypted',
-      () async {
-        final payment = PaymentBuilder()
-            .addDestination(
-              _encryptedUsdtPolygonAddress,
-              type: DestinationType.usdtPolygon,
-            )
-            .addDestination(
-              _encryptedUsdtEthereumAddress,
-              type: DestinationType.usdtEthereum,
-            )
-            .build();
-        client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
-
-        final result = await service.verify(
-          _transferUri(
-            DestinationType.usdtEthereum,
-            _usdtEthereumAddress,
+    test('an Ethereum scan leaves a Polygon rail in the same payment encrypted', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedUsdtPolygonAddress,
+            type: DestinationType.usdtPolygon,
+          )
+          .addDestination(
             _encryptedUsdtEthereumAddress,
-          ),
-        );
+            type: DestinationType.usdtEthereum,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtEthereumAddress, [payment]);
 
-        expect(result.status, equals(VerifyStatus.match));
-        expect(result.payments.single.destinations[0].isEncrypted, isTrue);
-        expect(result.payments.single.destinations[1].isEncrypted, isFalse);
-        expect(result.matchedDestinations, hasLength(1));
-      },
-    );
+      final result = await service.verify(
+        _transferUri(
+          DestinationType.usdtEthereum,
+          _usdtEthereumAddress,
+          _encryptedUsdtEthereumAddress,
+        ),
+      );
+
+      expect(result.status, equals(VerifyStatus.match));
+      expect(result.payments.single.destinations[0].isEncrypted, isTrue);
+      expect(result.payments.single.destinations[1].isEncrypted, isFalse);
+      expect(result.matchedDestinations, hasLength(1));
+    });
 
     for (final function in ['approve', 'transferFrom', 'transfer;x=1']) {
       test('ERC-681 /$function is unknown without a GET', () async {
@@ -1565,123 +1543,108 @@ void main() {
       'bitcoin://[bad',
       'ethereum:0xc2132d05d31c914a87c6611c10748aeb04b58e8f@${'9' * 5000}/transfer?address=$_deposit',
     ]) {
-      test(
-        'unparseable input is unknown and does not throw: ${text.length > 40 ? '${text.substring(0, 40)}…' : text}',
-        () async {
-          final result = await service.verify(text);
+      test('unparseable input is unknown and does not throw: ${text.length > 40 ? '${text.substring(0, 40)}…' : text}', () async {
+        final result = await service.verify(text);
 
-          expect(result.status, equals(VerifyStatus.unknown));
-          expect(client.getPaymentsCalls, isEmpty);
-        },
-      );
+        expect(result.status, equals(VerifyStatus.unknown));
+        expect(client.getPaymentsCalls, isEmpty);
+      });
     }
 
     for (final scheme in ['pol', 'eth', 'bsc', 'tron', 'ton', 'sol']) {
-      test(
-        'the removed $scheme: scheme is unknown without a GET even with valid params',
-        () async {
-          client.setupGetPayments(_encryptedUsdtPolygonAddress, [
-            _encryptedPayment(
-              _encryptedUsdtPolygonAddress,
-              DestinationType.usdtPolygon,
-            ),
-          ]);
-
-          final result = await service.verify(
-            '$scheme:$_usdtPolygonAddress?value=50&branta_id=${Uri.encodeComponent(_encryptedUsdtPolygonAddress)}&branta_secret=$_secret',
-          );
-
-          expect(result.status, equals(VerifyStatus.unknown));
-          expect(client.getPaymentsCalls, isEmpty);
-        },
-      );
-    }
-
-    test(
-      'bare chain addresses are unknown and do not call the client',
-      () async {
-        for (final address in [
-          _usdtPolygonAddress,
-          _usdtEthereumAddress,
-          _usdtTronAddress,
-          _usdtTonAddress,
-          _usdcSolanaAddress,
-        ]) {
-          expect(
-            (await service.verify(address)).status,
-            equals(VerifyStatus.unknown),
-            reason: address,
-          );
-        }
-        expect(client.getPaymentsCalls, isEmpty);
-      },
-    );
-
-    test(
-      'Polygon transfer verify ignores a sibling bitcoin rail on the same payment',
-      () async {
-        final payment = PaymentBuilder()
-            .addDestination(
-              _encryptedBitcoinAddress,
-              type: DestinationType.bitcoinAddress,
-            )
-            .addDestination(
-              _encryptedUsdtPolygonAddress,
-              type: DestinationType.usdtPolygon,
-            )
-            .build();
-        client.setupGetPayments(_encryptedUsdtPolygonAddress, [payment]);
-
-        final result = await service.verify(_brantaUsdtPolygonLookup());
-        expect(result.status, equals(VerifyStatus.match));
-        expect(
-          result.payments.single.destinations[0].value,
-          equals(_encryptedBitcoinAddress),
-        );
-        expect(result.payments.single.destinations[0].isEncrypted, isTrue);
-        expect(
-          result.payments.single.destinations[1].value,
-          equals(_usdtPolygonAddress),
-        );
-        expect(result.payments.single.destinations[1].isEncrypted, isFalse);
-        expect(result.matchedDestinations, hasLength(1));
-        expect(
-          result.matchedDestinations.single.type,
-          equals(DestinationType.usdtPolygon),
-        );
-      },
-    );
-
-    test(
-      'bitcoin verify ignores a sibling usdt_polygon rail on the same payment',
-      () async {
-        final payment = PaymentBuilder()
-            .addDestination(
-              _encryptedBitcoinAddress,
-              type: DestinationType.bitcoinAddress,
-            )
-            .addDestination(
-              _encryptedUsdtPolygonAddress,
-              type: DestinationType.usdtPolygon,
-            )
-            .build();
-        client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+      test('the removed $scheme: scheme is unknown without a GET even with valid params', () async {
+        client.setupGetPayments(_encryptedUsdtPolygonAddress, [
+          _encryptedPayment(
+            _encryptedUsdtPolygonAddress,
+            DestinationType.usdtPolygon,
+          ),
+        ]);
 
         final result = await service.verify(
-          'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret',
+          '$scheme:$_usdtPolygonAddress?value=50&branta_id=${Uri.encodeComponent(_encryptedUsdtPolygonAddress)}&branta_secret=$_secret',
         );
-        expect(result.status, equals(VerifyStatus.match));
+
+        expect(result.status, equals(VerifyStatus.unknown));
+        expect(client.getPaymentsCalls, isEmpty);
+      });
+    }
+
+    test('bare chain addresses are unknown and do not call the client', () async {
+      for (final address in [
+        _usdtPolygonAddress,
+        _usdtEthereumAddress,
+        _usdtTronAddress,
+        _usdtTonAddress,
+        _usdcSolanaAddress,
+      ]) {
         expect(
-          result.payments.single.destinations[0].value,
-          equals(_bitcoinAddress),
+          (await service.verify(address)).status,
+          equals(VerifyStatus.unknown),
+          reason: address,
         );
-        expect(
-          result.payments.single.destinations[1].value,
-          equals(_encryptedUsdtPolygonAddress),
-        );
-        expect(result.payments.single.destinations[1].isEncrypted, isTrue);
-      },
-    );
+      }
+      expect(client.getPaymentsCalls, isEmpty);
+    });
+
+    test('Polygon transfer verify ignores a sibling bitcoin rail on the same payment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
+            _encryptedUsdtPolygonAddress,
+            type: DestinationType.usdtPolygon,
+          )
+          .build();
+      client.setupGetPayments(_encryptedUsdtPolygonAddress, [payment]);
+
+      final result = await service.verify(_brantaUsdtPolygonLookup());
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.payments.single.destinations[0].value,
+        equals(_encryptedBitcoinAddress),
+      );
+      expect(result.payments.single.destinations[0].isEncrypted, isTrue);
+      expect(
+        result.payments.single.destinations[1].value,
+        equals(_usdtPolygonAddress),
+      );
+      expect(result.payments.single.destinations[1].isEncrypted, isFalse);
+      expect(result.matchedDestinations, hasLength(1));
+      expect(
+        result.matchedDestinations.single.type,
+        equals(DestinationType.usdtPolygon),
+      );
+    });
+
+    test('bitcoin verify ignores a sibling usdt_polygon rail on the same payment', () async {
+      final payment = PaymentBuilder()
+          .addDestination(
+            _encryptedBitcoinAddress,
+            type: DestinationType.bitcoinAddress,
+          )
+          .addDestination(
+            _encryptedUsdtPolygonAddress,
+            type: DestinationType.usdtPolygon,
+          )
+          .build();
+      client.setupGetPayments(_encryptedBitcoinAddress, [payment]);
+
+      final result = await service.verify(
+        'bitcoin:$_bitcoinAddress?branta_id=$_encryptedBitcoinAddress&branta_secret=$_secret',
+      );
+      expect(result.status, equals(VerifyStatus.match));
+      expect(
+        result.payments.single.destinations[0].value,
+        equals(_bitcoinAddress),
+      );
+      expect(
+        result.payments.single.destinations[1].value,
+        equals(_encryptedUsdtPolygonAddress),
+      );
+      expect(result.payments.single.destinations[1].isEncrypted, isTrue);
+    });
 
     test('bare bitcoin URI is unknown and does not call the client', () async {
       final result = await service.verify('bitcoin:$_bitcoinAddress');
@@ -2186,14 +2149,19 @@ void main() {
         final id = payment.destinations.single.id!;
         client.setupPostPayment(
           Payment(
-            destinations: [Destination(value: encrypted, type: type, id: id)],
+            destinations: [
+              Destination(value: encrypted, type: type, id: id),
+            ],
           ),
         );
 
         await service.addPayment(payment);
 
         expect(payment.destinations.single.value, equals(address));
-        expect(client.lastPosted!.destinations.single.value, equals(encrypted));
+        expect(
+          client.lastPosted!.destinations.single.value,
+          equals(encrypted),
+        );
         expect(client.lastPosted!.destinations.single.type, equals(type));
       });
     }

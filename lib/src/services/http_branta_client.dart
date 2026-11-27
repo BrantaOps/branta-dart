@@ -145,16 +145,14 @@ class HttpBrantaClient implements BrantaClient {
       // IOClient / BrowserClient cancel when abortTrigger completes.
       // MockClient ignores it — race so unit tests still terminate.
       final result = Completer<http.StreamedResponse>();
-      _httpClient
-          .send(request)
-          .then(
-            (streamed) {
-              if (!result.isCompleted) result.complete(streamed);
-            },
-            onError: (Object error, StackTrace stack) {
-              if (!result.isCompleted) result.completeError(error, stack);
-            },
-          );
+      _httpClient.send(request).then(
+        (streamed) {
+          if (!result.isCompleted) result.complete(streamed);
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!result.isCompleted) result.completeError(error, stack);
+        },
+      );
       abort.future.then((_) {
         if (!result.isCompleted) {
           result.completeError(http.RequestAbortedException(url));
