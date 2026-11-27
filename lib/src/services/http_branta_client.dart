@@ -8,6 +8,7 @@ import '../exceptions/incomplete_error.dart';
 import '../helpers/branta_extensions.dart';
 import '../interfaces/branta_client.dart';
 import '../models/payment.dart';
+import '../sdk_version.dart';
 
 /// Default wall-clock timeout for every HTTP call (GET, POST, health-check).
 const Duration httpTimeout = Duration(seconds: 30);
@@ -84,6 +85,8 @@ class HttpBrantaClient implements BrantaClient {
 
     final headers = _buildAuthHeaders(options, requireApiKey: true);
     headers['Content-Type'] = 'application/json';
+    // POST only, and not part of the HMAC input. GETs stay anonymous.
+    headers['X-Branta-SDK'] = 'dart/$brantaSdkVersion';
     _applyHmacHeaders(headers, baseUrl, body, options);
 
     final response = await _send(
