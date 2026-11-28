@@ -79,7 +79,7 @@ final payment = PaymentBuilder()
     .build();
 ```
 
-`setChildPlatform` and `Payment.childPlatform` are the deprecated old names. They still work: `setChildPlatform` calls `setBrand`, and a Payment with only `childPlatform` set is sent as `brand`. The SDK sends `brand`, so it needs a Branta server that accepts it.
+`setChildPlatform` and `Payment.childPlatform` are the deprecated old names. They still work: `setChildPlatform` calls `setBrand`, and a Payment with only `childPlatform` set is sent as `brand`.
 
 ### HMAC signing
 

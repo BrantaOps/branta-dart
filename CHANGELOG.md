@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `POST /v2/payments` now sends an `X-Branta-SDK` header (language and SDK version). GETs are unchanged.
 
 ### Changed
-- `addPayment` now sends `brand` instead of `child_platform`. This requires a Branta server that accepts `brand`. The logo-domain mismatch message names `brand.logoUrl` / `brand.logoLightUrl`.
+- `addPayment` now sends `brand` instead of `child_platform`. The logo-domain mismatch message names `brand.logoUrl` / `brand.logoLightUrl`.
 
 ### Deprecated
 - `PaymentBuilder.setChildPlatform()` and `Payment.childPlatform`. Use `setBrand()` and `brand`. Both still work: `setChildPlatform` delegates to `setBrand`, and a Payment with only `childPlatform` set is sent as `brand`.
