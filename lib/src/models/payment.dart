@@ -46,9 +46,8 @@ class Payment {
     final destinationsRaw = json['destinations'];
     // `brand` wins over the deprecated `child_platform`. The value is mirrored
     // into the deprecated field so existing readers keep working.
-    Platform? parsePlatform(Object? raw) => raw is Map
-        ? Platform.fromJson(Map<String, dynamic>.from(raw))
-        : null;
+    Platform? parsePlatform(Object? raw) =>
+        raw is Map ? Platform.fromJson(Map<String, dynamic>.from(raw)) : null;
     final parsedBrand =
         parsePlatform(json['brand']) ?? parsePlatform(json['child_platform']);
     return Payment(
