@@ -6,6 +6,7 @@ import '../classes/branta_api_options.dart';
 import '../exceptions/branta_payment_exception.dart';
 import '../exceptions/incomplete_error.dart';
 import '../helpers/branta_extensions.dart';
+import '../helpers/effective_brand.dart';
 import '../interfaces/branta_client.dart';
 import '../models/payment.dart';
 import '../sdk_version.dart';
@@ -247,8 +248,8 @@ class HttpBrantaClient implements BrantaClient {
         payment.parentPlatform?.logoLightUrl,
         'parentPlatform.logoLightUrl',
       );
-      check(payment.childPlatform?.logoUrl, 'childPlatform.logoUrl');
-      check(payment.childPlatform?.logoLightUrl, 'childPlatform.logoLightUrl');
+      check(payment.effectiveBrand?.logoUrl, 'brand.logoUrl');
+      check(payment.effectiveBrand?.logoLightUrl, 'brand.logoLightUrl');
     }
   }
 

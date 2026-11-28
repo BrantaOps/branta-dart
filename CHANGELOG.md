@@ -7,7 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- `PaymentBuilder.setBrand()` and `Payment.brand`. A brand is the payee a shared-key platform tags a payment with: a name plus optional logo URLs. Responses and raw payloads parse `brand` (or the old `child_platform`, with `brand` winning) into `brand`, and mirror it into `childPlatform`.
 - `POST /v2/payments` now sends an `X-Branta-SDK` header (language and SDK version). GETs are unchanged.
+
+### Changed
+- `addPayment` now sends `brand` instead of `child_platform`. The logo-domain mismatch message names `brand.logoUrl` / `brand.logoLightUrl`.
+
+### Deprecated
+- `PaymentBuilder.setChildPlatform()` and `Payment.childPlatform`. Use `setBrand()` and `brand`. Both still work: `setChildPlatform` delegates to `setBrand`, and a Payment with only `childPlatform` set is sent as `brand`.
 
 ### Documentation
 - `hmacSecret` is documented. It signs `addPayment` for platforms with Require HMAC on. The README links to the HMAC signing docs.

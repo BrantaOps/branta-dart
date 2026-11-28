@@ -1032,15 +1032,15 @@ void main() {
       expect(payment.toJson()['ttl'], equals(0));
     });
 
-    test('addMetadata and setChildPlatform serialize', () {
+    test('addMetadata and setBrand serialize', () {
       final payment = PaymentBuilder()
           .addMetadata('order', '1234')
-          .setChildPlatform('Child', logoUrl: 'https://example.com/logo.png')
+          .setBrand('Child', logoUrl: 'https://example.com/logo.png')
           .addDestination(_bitcoinAddress)
           .build();
       expect(payment.metadata, contains('1234'));
       final json = payment.toJson();
-      expect(json['child_platform'], {
+      expect(json['brand'], {
         'name': 'Child',
         'logo_url': 'https://example.com/logo.png',
       });
@@ -2533,6 +2533,94 @@ void main() {
             .length,
         equals(1),
       );
+    });
+  });
+
+  group('BrantaService.addPayment brand', () {
+    late MockBrantaClient client;
+    late MockAesEncryption aes;
+    late BrantaService service;
+
+    setUp(() {
+      client = MockBrantaClient();
+      aes = MockAesEncryption();
+      _setupDefaultMocks(aes);
+      service = _makeService(
+        client,
+        aes,
+        secretGenerator: MockSecretGenerator(_secret),
+      );
+    });
+
+    Future<void> post(Payment payment) async {
+      client.setupPostPayment(
+        Payment(
+          destinations: [
+            Destination(
+              value: _encryptedBitcoinAddress,
+              id: payment.destinations.single.id,
+            ),
+          ],
+        ),
+      );
+      await service.addPayment(payment);
+    }
+
+    test('the posted copy carries brand and the caller is unchanged', () async {
+      final payment = PaymentBuilder()
+          .addDestination(_bitcoinAddress)
+          .setBrand('Acme', logoUrl: 'https://example.com/logo.png')
+          .build();
+
+      await post(payment);
+
+      expect(client.lastPosted!.brand?.name, equals('Acme'));
+      expect(client.lastPosted!.toJson()['brand'], {
+        'name': 'Acme',
+        'logo_url': 'https://example.com/logo.png',
+      });
+      expect(client.lastPosted!.brand, isNot(same(payment.brand)));
+      expect(payment.brand?.name, equals('Acme'));
+      expect(payment.childPlatform, isNull);
+      expect(payment.destinations.single.value, equals(_bitcoinAddress));
+    });
+
+    test(
+      'a childPlatform-only payment is normalized onto brand in the copy',
+      () async {
+        final payment = Payment(
+          destinations: [Destination(value: _bitcoinAddress, id: 'id-1')],
+          // ignore: deprecated_member_use_from_same_package
+          childPlatform: const Platform(name: 'Old'),
+        );
+
+        await post(payment);
+
+        expect(client.lastPosted!.brand?.name, equals('Old'));
+        expect(client.lastPosted!.toJson()['brand'], {'name': 'Old'});
+        expect(
+          client.lastPosted!.toJson().containsKey('child_platform'),
+          isFalse,
+        );
+        // The caller's object is not rewritten.
+        expect(payment.brand, isNull);
+        // ignore: deprecated_member_use_from_same_package
+        expect(payment.childPlatform?.name, equals('Old'));
+      },
+    );
+
+    test('brand wins over childPlatform in the copy', () async {
+      final payment = Payment(
+        destinations: [Destination(value: _bitcoinAddress, id: 'id-1')],
+        brand: const Platform(name: 'New'),
+        // ignore: deprecated_member_use_from_same_package
+        childPlatform: const Platform(name: 'Old'),
+      );
+
+      await post(payment);
+
+      expect(client.lastPosted!.brand?.name, equals('New'));
+      expect(client.lastPosted!.toJson()['brand'], {'name': 'New'});
     });
   });
 

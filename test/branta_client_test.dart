@@ -109,7 +109,7 @@ void main() {
       );
     });
 
-    test('catches mismatched childPlatform.logoUrl', () async {
+    test('catches mismatched child_platform (as brand) logoUrl', () async {
       final client = clientWithResponse([
         {
           'destinations': destinations,
@@ -123,13 +123,13 @@ void main() {
           isA<BrantaPaymentException>().having(
             (e) => e.message,
             'message',
-            contains('childPlatform.logoUrl'),
+            contains('brand.logoUrl'),
           ),
         ),
       );
     });
 
-    test('catches mismatched childPlatform.logoLightUrl', () async {
+    test('catches mismatched child_platform (as brand) logoLightUrl', () async {
       final client = clientWithResponse([
         {
           'destinations': destinations,
@@ -143,7 +143,7 @@ void main() {
           isA<BrantaPaymentException>().having(
             (e) => e.message,
             'message',
-            contains('childPlatform.logoLightUrl'),
+            contains('brand.logoLightUrl'),
           ),
         ),
       );

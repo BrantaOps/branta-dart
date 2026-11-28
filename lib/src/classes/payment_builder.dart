@@ -40,18 +40,27 @@ class PaymentBuilder {
     return this;
   }
 
-  PaymentBuilder setChildPlatform(
+  /// Tags the payment with the payee a shared-key platform is paying on behalf of.
+  PaymentBuilder setBrand(
     String name, {
     String? logoUrl,
     String? logoLightUrl,
   }) {
-    _payment.childPlatform = Platform(
+    _payment.brand = Platform(
       name: name,
       logoUrl: logoUrl,
       logoLightUrl: logoLightUrl,
     );
     return this;
   }
+
+  /// Deprecated alias of [setBrand].
+  @Deprecated('Use setBrand')
+  PaymentBuilder setChildPlatform(
+    String name, {
+    String? logoUrl,
+    String? logoLightUrl,
+  }) => setBrand(name, logoUrl: logoUrl, logoLightUrl: logoLightUrl);
 
   Payment build() => _payment;
 }

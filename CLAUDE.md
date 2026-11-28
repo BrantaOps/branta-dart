@@ -19,6 +19,7 @@ Invariants that break silently. Check them before you change `verify` or `addPay
 ## Dart specifics
 
 - A logo-domain mismatch throws `BrantaPaymentException`.
+- `setBrand` is the method and `brand` is the wire field. `setChildPlatform` / `Payment.childPlatform` stay only as `@Deprecated` aliases: the setter delegates to `setBrand`, and the effective brand is `brand ?? childPlatform` (internal `effectiveBrand` helper, not exported). Parsing accepts `brand` or `child_platform` and mirrors the value into both fields. Never send `child_platform`.
 - `hmacSecret` signs `POST /v2/payments` for platforms with Require HMAC on. It is not deprecated.
 - `DestinationType` is only what `addPayment` accepts. It also includes `usdt_tron`, `usdt_ton`, `usdt_solana`, and `usdc_solana`. They can be posted but no URI verifies them, and they are not on the public Destination types page. There is no `usdc_ton`.
 
